@@ -1,0 +1,100 @@
+# ==============================================================================
+# MYF AI Agent CLI (.gitignore)
+# ==============================================================================
+
+# ── Python & Bytecode ────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.manifest
+*.spec
+
+# ── Large Binaries & Models (>50MB) ──────────────────────────────────────────
+*.exe
+*.gguf
+*.bin
+*.onnx
+models/
+
+# ── Virtual Environments ──────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# ── Test & Quality Tools ──────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.ruff_cache/
+.mypy_cache/
+
+# ── Environment & Secrets ─────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.env
+agent_system/.env
+!*.env.example
+
+# ── Logs & Databases ──────────────────────────────────────────────────────────
+*.log
+*.sqlite
+*.sqlite3
+*.db
+logs.db
+agent_system.log
+agent_system/agent_system.log
+.external_sessions.json
+
+# ── Codebase Memory & Graph Cache ─────────────────────────────────────────────
+.codebase-memory/
+.repomap.tags.cache.v*/
+*.zst
+
+# ── Generated Projects & Temporary Workspace ─────────────────────────────────
+output_project/*
+!output_project/.gitkeep
+agent_system/output_project/*
+!agent_system/output_project/.gitkeep
+
+projects/*
+!projects/.gitkeep
+agent_system/projects/*
+!agent_system/projects/.gitkeep
+
+.myfcli/temp_codes/
+**/temp_codes/
+checkpoint.json
+
+# ── IDEs & Operating System ───────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini

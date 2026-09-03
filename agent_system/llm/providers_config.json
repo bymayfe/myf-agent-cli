@@ -1,0 +1,184 @@
+{
+  "version": "1.0",
+  "description": "Desteklenen LLM saglayicilari ve her saglayici icin ajan model atamalari ve context window limitleri.",
+  "active_provider": "nvidia",
+  "providers": {
+    "ollama": {
+      "label": "Lokal - Ollama",
+      "description": "Tamamen lokal, internet gerekmez. Ollama servisi calisir olmali. (Not: 27B+ modeller icin VRAM korumasi adina 4096, 4B-14B icin 8192 context kullanilir)",
+      "api_base": "http://localhost:11434",
+      "api_key": "",
+      "api_key_env": null,
+      "model_prefix": "ollama",
+      "requires_key": false,
+      "default_context_window": 32768,
+      "model_context_windows": {
+        "qwen3.8:latest": 32768,
+        "qwen3.5:4b": 16384,
+        "qwen2.5-coder:7b": 32768,
+        "qwen2.5-coder:14b": 32768,
+        "qwen3.8:27b": 32768,
+        "qwen3:27b": 32768,
+        "deepseek-r1:8b": 32768,
+        "deepseek-r1:14b": 32768,
+        "deepseek-r1:32b": 32768,
+        "ornith-1.5:9b": 32768
+      },
+      "agent_models": {
+        "coordinator": "ollama/qwen3.8:latest",
+        "product_manager": "ollama/qwen3.8:latest",
+        "software_architect": "ollama/qwen3.8:latest",
+        "developer": "ollama/qwen3.8:latest",
+        "qa_tester": "ollama/qwen3.8:latest",
+        "reviewer": "ollama/qwen3.8:latest",
+        "optimizer": "ollama/qwen3.8:latest",
+        "security_auditor": "ollama/qwen3.8:latest",
+        "documentation_writer": "ollama/qwen3.8:latest",
+        "devops_engineer": "ollama/qwen3.8:latest",
+        "custom": "ollama/qwen3.8:latest"
+      }
+    },
+    "kimi": {
+      "label": "API - Kimi K2 (Moonshot AI)",
+      "description": "Cok guclu, ajan gorevlerinde uzman. Ucretsiz tier mevcut.",
+      "api_base": "https://api.moonshot.cn/v1",
+      "api_key": "",
+      "api_key_env": "MOONSHOT_API_KEY",
+      "model_prefix": "moonshot",
+      "requires_key": true,
+      "key_url": "https://platform.moonshot.cn",
+      "default_context_window": 131072,
+      "model_context_windows": {
+        "kimi-k2": 131072,
+        "moonshot-v1-8k": 8192,
+        "moonshot-v1-32k": 32768,
+        "moonshot-v1-128k": 131072
+      },
+      "agent_models": {
+        "coordinator": "moonshot/kimi-k2",
+        "product_manager": "moonshot/kimi-k2",
+        "software_architect": "moonshot/kimi-k2",
+        "developer": "moonshot/kimi-k2",
+        "qa_tester": "moonshot/kimi-k2",
+        "reviewer": "moonshot/kimi-k2",
+        "security_auditor": "moonshot/kimi-k2",
+        "documentation_writer": "moonshot/moonshot-v1-8k",
+        "devops_engineer": "moonshot/kimi-k2",
+        "custom": "moonshot/kimi-k2"
+      }
+    },
+    "openrouter": {
+      "label": "API - OpenRouter (100+ model)",
+      "description": "Tek API key ile Llama, Gemini, Claude, GPT ve daha fazlasina erisim.",
+      "api_base": "https://openrouter.ai/api/v1",
+      "api_key": "",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "model_prefix": "openrouter",
+      "requires_key": true,
+      "key_url": "https://openrouter.ai/keys",
+      "default_context_window": 32768,
+      "model_context_windows": {
+        "qwen/qwen3-235b-a22b": 32768,
+        "qwen/qwen2.5-coder-32b-instruct": 32768,
+        "anthropic/claude-3.5-sonnet": 200000,
+        "openai/gpt-4o": 128000,
+        "google/gemini-2.0-flash": 1000000,
+        "deepseek/deepseek-r1": 65536
+      },
+      "agent_models": {
+        "coordinator": "openrouter/qwen/qwen3-235b-a22b",
+        "product_manager": "openrouter/qwen/qwen3-235b-a22b",
+        "software_architect": "openrouter/qwen/qwen3-235b-a22b",
+        "developer": "openrouter/qwen/qwen2.5-coder-32b-instruct",
+        "qa_tester": "openrouter/qwen/qwen2.5-coder-32b-instruct",
+        "reviewer": "openrouter/qwen/qwen3-235b-a22b",
+        "security_auditor": "openrouter/qwen/qwen3-235b-a22b",
+        "documentation_writer": "openrouter/qwen/qwen3-235b-a22b",
+        "devops_engineer": "openrouter/qwen/qwen3-235b-a22b",
+        "custom": "openrouter/qwen/qwen3-235b-a22b"
+      }
+    },
+    "lm_studio": {
+      "label": "Lokal - LM Studio",
+      "description": "LM Studio GUI uygulamasi uzerinden lokal model.",
+      "api_base": "http://localhost:1234/v1",
+      "api_key": "lm-studio",
+      "api_key_env": null,
+      "model_prefix": "lm_studio",
+      "requires_key": false,
+      "default_context_window": 8192,
+      "model_context_windows": {
+        "lm_studio/qwen3.5-9b": 8192,
+        "lm_studio/qwen2.5-coder-7b": 8192
+      },
+      "agent_models": {
+        "coordinator": "lm_studio/qwen3.5-9b",
+        "product_manager": "lm_studio/qwen3.5-9b",
+        "software_architect": "lm_studio/qwen3.5-9b",
+        "developer": "lm_studio/qwen2.5-coder-7b",
+        "qa_tester": "lm_studio/qwen2.5-coder-7b",
+        "reviewer": "lm_studio/qwen3.5-9b",
+        "security_auditor": "lm_studio/qwen3.5-9b",
+        "documentation_writer": "lm_studio/qwen3.5-9b",
+        "devops_engineer": "lm_studio/qwen3.5-9b",
+        "custom": "lm_studio/qwen3.5-9b"
+      }
+    },
+    "nvidia": {
+      "label": "API - NVIDIA NIM (DGX Cloud H100)",
+      "description": "NVIDIA NIM uzerinde DeepSeek V4, Nemotron ve acik modeller. Ucretsiz 1000 kredi.",
+      "api_base": "https://integrate.api.nvidia.com/v1",
+      "api_key": "",
+      "api_key_env": "NVIDIA_API_KEY",
+      "model_prefix": "openai",
+      "requires_key": true,
+      "key_url": "https://build.nvidia.com",
+      "default_context_window": 65536,
+      "model_context_windows": {
+        "deepseek-ai/deepseek-v4-pro-0813": 65536,
+        "deepseek-ai/deepseek-v4-flash-0731": 65536,
+        "mistralai/codestral-22b-instruct-v0.1": 32768,
+        "nvidia/llama-3.1-nemotron-70b-instruct": 131072
+      },
+      "agent_models": {
+        "coordinator": "openai/deepseek-ai/deepseek-v4-pro-0813",
+        "product_manager": "openai/deepseek-ai/deepseek-v4-pro-0813",
+        "software_architect": "openai/deepseek-ai/deepseek-v4-pro-0813",
+        "developer": "openai/deepseek-ai/deepseek-v4-pro-0813",
+        "qa_tester": "openai/deepseek-ai/deepseek-v4-pro-0813",
+        "reviewer": "openai/deepseek-ai/deepseek-v4-pro-0813",
+        "optimizer": "openai/deepseek-ai/deepseek-v4-pro-0813",
+        "security_auditor": "openai/deepseek-ai/deepseek-v4-pro-0813",
+        "documentation_writer": "openai/deepseek-ai/deepseek-v4-pro-0813",
+        "devops_engineer": "openai/deepseek-ai/deepseek-v4-pro-0813",
+        "custom": "openai/deepseek-ai/deepseek-v4-pro-0813"
+      }
+    },
+    "llama_cpp": {
+      "label": "Lokal - llama.cpp (llama-server)",
+      "description": "Saf C++ motoru, minimum RAM ve maksimum verimlilik. llama-server calisir olmali.",
+      "api_base": "http://localhost:8080/v1",
+      "api_key": "llama-cpp",
+      "api_key_env": null,
+      "model_prefix": "openai",
+      "requires_key": false,
+      "default_context_window": 8192,
+      "model_context_windows": {
+        "default": 8192
+      },
+      "agent_models": {
+        "coordinator": "openai/default",
+        "product_manager": "openai/default",
+        "software_architect": "openai/default",
+        "developer": "openai/default",
+        "qa_tester": "openai/default",
+        "reviewer": "openai/default",
+        "optimizer": "openai/default",
+        "security_auditor": "openai/default",
+        "documentation_writer": "openai/default",
+        "devops_engineer": "openai/default",
+        "custom": "openai/default"
+      }
+    }
+  }
+}

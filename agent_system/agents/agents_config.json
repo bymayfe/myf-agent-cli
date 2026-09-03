@@ -1,0 +1,76 @@
+{
+  "version": "1.0",
+  "description": "Aktif agent listesi. manage_agents.py ile yonetin.",
+  "agents": [
+    {
+      "id": "agent-001",
+      "display_name": "Urun Yoneticisi",
+      "role_type": "product_manager",
+      "model": "ollama/qwen3.8:latest",
+      "pipeline_order": 1,
+      "enabled": true,
+      "description": "PRD ve gereksinim belgesi olusturur",
+      "custom_prompt": null
+    },
+    {
+      "id": "agent-002",
+      "display_name": "Yazilim Mimari",
+      "role_type": "software_architect",
+      "model": "ollama/qwen3.8:latest",
+      "pipeline_order": 2,
+      "enabled": true,
+      "description": "Mimari tasarim belgesi ve dosya yapisi olusturur",
+      "custom_prompt": null
+    },
+    {
+      "id": "agent-003",
+      "display_name": "Yazilim Gelistirici",
+      "role_type": "developer",
+      "model": "ollama/qwen3.8:latest",
+      "pipeline_order": 3,
+      "enabled": true,
+      "description": "Tam ve calisir kaynak kod uretir",
+      "custom_prompt": null
+    },
+    {
+      "id": "agent-004",
+      "display_name": "QA Test Muhendisi",
+      "role_type": "qa_tester",
+      "model": "ollama/qwen3.8:latest",
+      "pipeline_order": 4,
+      "enabled": true,
+      "description": "Derin mantik ve unit testleri yazar, kodu test eder",
+      "custom_prompt": null
+    },
+    {
+      "id": "agent-005",
+      "display_name": "Kod Gozlemcisi",
+      "role_type": "reviewer",
+      "model": "ollama/qwen3.8:latest",
+      "pipeline_order": 5,
+      "enabled": true,
+      "description": "Koddaki sorunlari duzeltir ve CHANGELOG yazar",
+      "custom_prompt": null
+    },
+    {
+      "id": "agent-006",
+      "display_name": "Dokumantasyon Yazari",
+      "role_type": "documentation_writer",
+      "model": "ollama/qwen3.8:latest",
+      "pipeline_order": 6,
+      "enabled": true,
+      "description": "README.md, kullanim kilavuzu ve mimari dokumantasyon olusturur",
+      "custom_prompt": null
+    },
+    {
+      "id": "agent-007",
+      "display_name": "Performans Optimizatoru",
+      "role_type": "optimizer",
+      "model": "ollama/qwen3.8:latest",
+      "pipeline_order": 7,
+      "enabled": true,
+      "description": "Profiling logu analiz eder, hot-spot'lari bulup kodu optimize eder. Sadece 'optimize et' gibi kelimeler gectiginde devreye girer.",
+      "custom_prompt": null
+    }
+  ]
+}
