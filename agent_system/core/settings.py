@@ -47,6 +47,8 @@ _DEFAULTS: dict[str, Any] = {
     # ── LLM Parametreleri ────────────────────
     "temperature":       0.2,
     "max_tokens":        8192,
+    "top_p":             0.95,
+    "top_k":             40,
 
     # ── Pipeline Modelleri (default_model ile otomatik senkron) ──
     # Planlama (PRD + Mimari)
@@ -241,6 +243,24 @@ class Settings:
     @max_tokens.setter
     def max_tokens(self, value: int) -> None:
         self._data["max_tokens"] = max(256, int(value))
+        self.save()
+
+    @property
+    def top_p(self) -> float:
+        return float(self._data.get("top_p", 0.95))
+
+    @top_p.setter
+    def top_p(self, value: float) -> None:
+        self._data["top_p"] = max(0.0, min(1.0, float(value)))
+        self.save()
+
+    @property
+    def top_k(self) -> int:
+        return int(self._data.get("top_k", 40))
+
+    @top_k.setter
+    def top_k(self, value: int) -> None:
+        self._data["top_k"] = max(1, min(200, int(value)))
         self.save()
 
     # ── Pipeline Modelleri ──────────────────────────────────

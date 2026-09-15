@@ -210,12 +210,26 @@ def list_providers() -> list[dict]:
 
 def _get_llm_params() -> dict:
     cfg = get_provider_config()
+    try:
+        from settings import settings as _s
+        s_temp = _s.temperature
+        s_max_tok = _s.max_tokens
+        s_top_p = _s.top_p
+        s_top_k = _s.top_k
+    except Exception:
+        s_temp = 0.2
+        s_max_tok = 8192
+        s_top_p = 0.95
+        s_top_k = 40
+
     return {
         "provider":    cfg.get("name", "ollama"),
         "api_base":    cfg.get("api_base", "http://localhost:11434"),
         "api_key":     cfg.get("api_key", ""),
-        "temperature": float(os.getenv("TEMPERATURE", "0.3")),
-        "max_tokens":  int(os.getenv("MAX_TOKENS", "8192")),
+        "temperature": float(os.getenv("TEMPERATURE", str(s_temp))),
+        "max_tokens":  int(os.getenv("MAX_TOKENS", str(s_max_tok))),
+        "top_p":       float(os.getenv("TOP_P", str(s_top_p))),
+        "top_k":       int(os.getenv("TOP_K", str(s_top_k))),
     }
 
 
@@ -295,6 +309,8 @@ def print_config():
     print(f"  Guvenlik  : {permission_manager.get_status_badge()}")
     print(f"  Temp      : {LLM_PARAMS['temperature']}")
     print(f"  MaxTok    : {LLM_PARAMS['max_tokens']}")
+    print(f"  Top-P     : {LLM_PARAMS.get('top_p', 0.95)}")
+    print(f"  Top-K     : {LLM_PARAMS.get('top_k', 40)}")
     print("\n  Ajan -> Model:")
     for ajan, model in AGENT_MODELS.items():
         short = model.split("/")[-1]

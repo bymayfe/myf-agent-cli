@@ -634,6 +634,8 @@ class CommandHub:
             # ── LLM ──
             ("temperature",         "Sicaklik (0.0-2.0)",         float, "LLM"),
             ("max_tokens",          "Maks token",                 int,   "LLM"),
+            ("top_p",               "Top-P Cekirdek (0.0-1.0)",   float, "LLM"),
+            ("top_k",               "Top-K Siniri (1-200)",       int,   "LLM"),
             # ── Pipeline Modelleri ──
             ("default_model",       "Genel Model (Tüm Sistem)",   str,   "Modeller"),
             ("planning_model",      "Planlama modeli (PRD+Mimar)",str,   "Modeller"),

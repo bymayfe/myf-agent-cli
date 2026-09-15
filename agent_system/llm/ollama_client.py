@@ -31,9 +31,11 @@ def call_ollama_chat(
     stream: bool = False,
     on_token: Optional[Callable[[str, str], None]] = None,  # (token, token_type)
     think_mode: bool = False,
-    temperature: float = 0.3,
+    temperature: float = 0.2,
     max_tokens: int = 8192,
     num_ctx: Optional[int] = None,
+    top_p: Optional[float] = 0.95,
+    top_k: Optional[int] = 40,
 ) -> str:
     """
     Ollama /api/chat endpoint'ine doğrudan HTTP POST isteği gönderir.
@@ -44,15 +46,21 @@ def call_ollama_chat(
     # Context window: parametre verilmemişse model boyutuna göre güvenli varsayılan
     num_ctx_val = num_ctx or (4096 if "27b" in model_name.lower() else 8192)
 
+    options = {
+        "temperature": temperature,
+        "num_predict": max_tokens,
+        "num_ctx": num_ctx_val,
+    }
+    if top_p is not None:
+        options["top_p"] = top_p
+    if top_k is not None:
+        options["top_k"] = top_k
+
     payload = {
         "model": model_name,
         "messages": messages,
         "stream": True,
-        "options": {
-            "temperature": temperature,
-            "num_predict": max_tokens,
-            "num_ctx": num_ctx_val,
-        }
+        "options": options,
     }
 
     req = urllib.request.Request(

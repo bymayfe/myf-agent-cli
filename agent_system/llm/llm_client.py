@@ -263,16 +263,21 @@ def call_llm(
                         temperature=LLM_PARAMS["temperature"],
                         max_tokens=LLM_PARAMS["max_tokens"],
                         num_ctx=ctx_window,
+                        top_p=LLM_PARAMS.get("top_p"),
+                        top_k=LLM_PARAMS.get("top_k"),
                     )
                 else:
-                    response = completion(
-                        model=current_model,
-                        messages=messages,
-                        temperature=LLM_PARAMS["temperature"],
-                        max_tokens=LLM_PARAMS["max_tokens"],
-                        api_base=LLM_PARAMS["api_base"],
-                        api_key=LLM_PARAMS["api_key"],
-                    )
+                    completion_kwargs = {
+                        "model": current_model,
+                        "messages": messages,
+                        "temperature": LLM_PARAMS["temperature"],
+                        "max_tokens": LLM_PARAMS["max_tokens"],
+                        "api_base": LLM_PARAMS["api_base"],
+                        "api_key": LLM_PARAMS["api_key"],
+                    }
+                    if "top_p" in LLM_PARAMS and LLM_PARAMS["top_p"] is not None:
+                        completion_kwargs["top_p"] = LLM_PARAMS["top_p"]
+                    response = completion(**completion_kwargs)
                     content = response.choices[0].message.content
 
                 print(f"  [{agent_name}] Yanit alindi.")
