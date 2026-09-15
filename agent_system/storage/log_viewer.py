@@ -11,6 +11,15 @@ Kullanım:
 import sys
 import os
 from pathlib import Path
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from colorama import init, Fore, Style
 
 init(autoreset=True)
@@ -23,7 +32,7 @@ for _sub in [_SYS_ROOT, _SYS_ROOT / "core", _SYS_ROOT / "engines", _SYS_ROOT / "
     if _sub.is_dir() and _s not in sys.path:
         sys.path.insert(0, _s)
 
-from log_store import log_store
+from log_store import log_store, _fmt_table
 from session_manager import session_manager
 
 
@@ -48,20 +57,33 @@ def main():
         args = args[1:]
     else:
         # Son aktif oturumu veya varsayılan proje dizinini bul
-        recent = session_manager.list_recent(limit=10)
+        recent = session_manager.list_recent(limit=10) if hasattr(session_manager, "list_recent") else (session_manager.list_all_sessions()[:10] if hasattr(session_manager, "list_all_sessions") else [])
         if not recent:
             print(c("  Henüz bir proje veya oturum bulunamadı.", Fore.YELLOW))
             return
 
         print(c("  Mevcut Projeler:", Fore.WHITE, Style.BRIGHT))
         for i, s in enumerate(recent, 1):
-            p_name = s.custom_project_dir or s.title or s.session_id
-            print(f"   [{i}] {c(s.title or 'Yeni Oturum', Fore.GREEN, Style.BRIGHT)}  ↳  {p_name}")
+            if isinstance(s, dict):
+                p_title = s.get("title") or "Yeni Oturum"
+                p_name = s.get("path") or s.get("folder_name") or s.get("session_id") or "Oturum"
+            else:
+                p_title = getattr(s, "title", None) or "Yeni Oturum"
+                p_name = getattr(s, "custom_project_dir", None) or getattr(s, "project_dir", None) or getattr(s, "folder_name", None) or getattr(s, "session_id", "Oturum")
+            print(f"   [{i}] {c(p_title, Fore.GREEN, Style.BRIGHT)}  ↳  {p_name}")
 
         choice = input(c(f"\n  İncelemek istediğiniz proje [1-{len(recent)}] (Enter=1): ", Fore.CYAN)).strip()
         idx = int(choice) - 1 if choice.isdigit() and 1 <= int(choice) <= len(recent) else 0
         selected = recent[idx]
-        project_dir = Path(selected.custom_project_dir) if selected.custom_project_dir else Path(__file__).parent / "projects" / selected.project_dir_name
+        if isinstance(selected, dict):
+            project_dir = Path(selected.get("path") or selected.get("folder_name") or "")
+        elif hasattr(selected, "custom_project_dir") and selected.custom_project_dir:
+            project_dir = Path(selected.custom_project_dir)
+        elif hasattr(selected, "project_dir") and selected.project_dir:
+            project_dir = Path(selected.project_dir)
+        else:
+            p_folder = getattr(selected, "project_dir_name", getattr(selected, "folder_name", ""))
+            project_dir = _SYS_ROOT / "projects" / p_folder
 
     print(c(f"\n  📁 Aktif Proje: {project_dir}", Fore.CYAN, Style.BRIGHT))
 

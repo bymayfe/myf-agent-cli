@@ -352,6 +352,11 @@ class SessionManager:
         sessions.sort(key=lambda x: x["mtime"], reverse=True)
         return sessions
 
+    def list_recent(self, limit: int = 10) -> list[dict[str, Any]]:
+        """Son aktif oturumları en yeniden eskiye sıralı olarak döndürür."""
+        all_sess = self.list_all_sessions()
+        return all_sess[:limit]
+
     def resume_session(self, session_dict: dict[str, Any]) -> Session:
         """Önceki boş oturumu temizle ve seçilen oturumu aktif yap."""
         if hasattr(self, "current_session") and self.current_session:

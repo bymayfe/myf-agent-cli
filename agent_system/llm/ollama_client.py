@@ -33,28 +33,16 @@ def call_ollama_chat(
     think_mode: bool = False,
     temperature: float = 0.3,
     max_tokens: int = 8192,
+    num_ctx: Optional[int] = None,
 ) -> str:
     """
     Ollama /api/chat endpoint'ine doğrudan HTTP POST isteği gönderir.
-
-    Args:
-        messages   : Chat mesaj listesi [{"role": "user", "content": "..."}]
-        model      : Model adı (örn. "ollama/qwen3.5:9b" veya "qwen3.5:9b")
-        api_base   : Ollama sunucu adresi (varsayılan: http://localhost:11434)
-        stream     : Streaming yanıt olsun mu?
-        on_token   : Streaming sırasında her token gelince çağrılan fonksiyon (token, token_type="content"|"thinking")
-        think_mode : True ise düşünme (reasoning) tokenları da verilir/yazılır
-        temperature: LLM sıcaklık değeri
-        max_tokens : Üretilecek maksimum token sayısı
-
-    Returns:
-        Üretilen tam yanıt metni.
     """
     model_name = model.split("/")[-1] if "/" in model else model
     endpoint = f"{api_base.rstrip('/')}/api/chat"
 
-    # Ollama için geniş context window (32k)
-    num_ctx_val = 32768
+    # Context window: parametre verilmemişse model boyutuna göre güvenli varsayılan
+    num_ctx_val = num_ctx or (4096 if "27b" in model_name.lower() else 8192)
 
     payload = {
         "model": model_name,

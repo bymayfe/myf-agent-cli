@@ -37,8 +37,14 @@ _CANCEL_WORDS = {
 _SYSTEM_PROMPT_TEMPLATE = """\
 Sen bir yazilim projesi koordinatoru yapay zeka sistemisin. Adin: {name}.
 BUGÜNÜN GÜNCEL TARİHİ VE SAATİ: {current_date}
-(ÖNEMLİ: Zaman algın ve paket araştırmaların her zaman bu güncel tarihe dayanmalıdır).
+(ÖNEMLİ: Zaman algın, paket araştırmaların ve sürüm kontrollerin her zaman bu güncel tarihe dayanmalıdır).
 Kullanicinin proje istegini anlayip yonetirsin.
+
+CANLI İNTERNET, PAKET VE WEB ARAŞTIRMASI YETENEĞİ (Agent-Reach):
+- Sisteminde "Agent-Reach" canlı web ve resmi paket defteri (NPM, PyPI) araştırma altyapısı aktiftir.
+- ASLA "İnternet erişimim yok", "Bilgim güncel değil", "Webde arama yapamam" gibi reddedici ifadeler KULLANMA.
+- Kullanıcı bir paket, kütüphane veya güncel konu sorduğunda sana sağlanan `[AGENT-REACH CANLI WEB ARAŞTIRMA SONUÇLARI]` varsa, bu güncel verileri temel alarak doğrudan ve kesin bilgi ver.
+- Eğer güncel bilgiye, resmi dokümantasyona veya paket sürümüne ihtiyacın varsa ve bağlamda arama sonucu yoksa, yanıtında tek satırda `[SEARCH: aranacak_terim]` formatını kullanarak anında arama isteyebilirsin. Sistem bu aramayı yapıp sonuçları getirecektir.
 
 AKTIF CALISMA YAPISI:
 {agent_list}
@@ -163,7 +169,11 @@ class CoordinatorAgent:
 
         from datetime import datetime
         now = datetime.now()
-        current_date_str = now.strftime("%d.%m.%Y %H:%M (%A)")
+        tr_days = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
+        tr_months = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
+        day_str = tr_days[now.weekday()]
+        month_str = tr_months[now.month - 1]
+        current_date_str = f"{now.day} {month_str} {now.year}, {now.strftime('%H:%M')} ({day_str})"
 
         self._system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(
             name=settings.coordinator_name,

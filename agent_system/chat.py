@@ -1558,7 +1558,7 @@ class ChatSession:
                     except Exception:
                         pass
 
-            # Otomatik Agent-Reach Web Araştırma Algılama (Çok Satırlı & Akıllı Anahtar Kelime Desteği)
+            # Otomatik Agent-Reach Web Araştırma Algılama (Genişletilmiş Doğal Dil & Akıllı Temizleme)
             s_query = None
             for line in user_input.strip().splitlines():
                 line_clean = line.strip()
@@ -1567,20 +1567,51 @@ class ChatSession:
                     s_query = prefix_m.group(1).strip()
                     break
 
-            # Eğer açık prefix yoksa ama metinde araştırma talebi geçiyorsa
-            if not s_query and re.search(r'\b(?:internetten ara|araştırarak|araştırsın|webde araştır|güncel sürümleri ara)\b', user_input, re.IGNORECASE):
-                first_line = user_input.strip().splitlines()[0].strip()
-                s_query = re.sub(r'^[#*->\s]+', '', first_line)[:100]
+            # Açık prefix yoksa doğal dil araştırma / paket sürümü / web arama niyetini tespit et
+            if not s_query:
+                tr_research_intent = re.search(
+                    r'(?:internetten|internette|webden|webde|web\'den|web\'de|google\'dan|google\'da|online)\b.*?\b(?:ara|araştır\w*|arastir\w*|bak\w*|bul\w*|öğren\w*|ogren\w*|sürüm\w*|surum\w*|haber\w*|bilgi\w*|doküman\w*|dokuman\w*)|'
+                    r'\b(?:en güncel|güncel sürüm\w*|güncel versiyon\w*|son sürüm\w*|latest version|paket sürüm\w*|kütüphane sürüm\w*)\b|'
+                    r'\b(?:araştır\w*|arastir\w*|arama yap|araştırması yap)\b',
+                    user_input,
+                    re.IGNORECASE
+                )
+                if tr_research_intent:
+                    first_line = user_input.strip().splitlines()[0].strip()
+                    q_cand = re.sub(r'^[#*->\s]+', '', first_line)
+                    # Konuşma dolgu ve rica ifadelerini temizle
+                    filler_patterns = [
+                        r'\b(?:internetten|internette|webden|webde|web\'den|web\'de|google\'dan|google\'da|online)\b',
+                        r'\b(?:araştır\w*|arastir\w*|ara\w*)\s*(?:m[ıiüu]?[sş][ıiüu]+n\w*)?\b',
+                        r'\b(?:bak\w*)\s*(?:m[ıiüu]?[sş][ıiüu]+n\w*)?\b',
+                        r'\b(?:bul\w*)\s*(?:m[ıiüu]?[sş][ıiüu]+n\w*)?\b',
+                        r'\b(?:öğren\w*|ogren\w*|söyle\w*)\s*(?:m[ıiüu]?[sş][ıiüu]+n\w*)?\b',
+                        r'\b(?:lütfen|lutfen|rica\s*etsem|rica\s*ederim|acaba)\b',
+                        r'\b(?:hakkında\s*bilgi\s*ver\w*|bilgi\s*ver\w*)\b',
+                        r'\b(?:nedir|nelerdir)\b',
+                    ]
+                    for pat in filler_patterns:
+                        q_cand = re.sub(pat, ' ', q_cand, flags=re.IGNORECASE)
+                    q_cand = re.sub(r'[\?\.!,;:]+', ' ', q_cand)
+                    q_cand = re.sub(r'\s+', ' ', q_cand).strip()
+                    s_query = q_cand if len(q_cand) >= 2 else first_line[:80]
 
             if s_query:
                 from datetime import datetime
                 from colorama import Fore, Style
                 now = datetime.now()
-                month_year = now.strftime("%B %Y")
+                tr_months = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
+                cur_month_tr = tr_months[now.month - 1]
+                month_year_tr = f"{cur_month_tr} {now.year}"
                 
                 clean_q = re.sub(r'[\r\n]+', ' ', s_query).strip()[:80]
-                if not any(k in clean_q.lower() for k in ["202", "203", "ocak", "şubat", "mart", "nisan", "mayıs", "haziran", "temmuz", "ağustos", "eylül", "ekim", "kasım", "aralık", "january", "august"]):
-                    search_q = f"{clean_q} {month_year}"
+                has_year_or_month = any(k in clean_q.lower() for k in [
+                    str(now.year), "202", "203", "ocak", "şubat", "mart", "nisan",
+                    "mayıs", "haziran", "temmuz", "ağustos", "eylül", "ekim", "kasım", "aralık",
+                    "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"
+                ])
+                if not has_year_or_month:
+                    search_q = f"{clean_q} {month_year_tr}"
                 else:
                     search_q = clean_q
 
@@ -1589,13 +1620,13 @@ class ChatSession:
 
                 # Kullanıcıya terminalde canlı web bulgularını göster
                 print()
-                print(f"  {Fore.CYAN}{Style.BRIGHT}┌── 🌐 [CANLI WEB ARAŞTIRMA BULGULARI ({month_year})] ──────────────────{Style.RESET_ALL}")
+                print(f"  {Fore.CYAN}{Style.BRIGHT}┌── 🌐 [CANLI WEB ARAŞTIRMA BULGULARI ({month_year_tr})] ──────────────────{Style.RESET_ALL}")
                 for r_line in s_results.splitlines():
                     if r_line.strip():
                         print(f"  {Fore.CYAN}│ {Fore.WHITE}{r_line}{Style.RESET_ALL}")
-                print(f"  {Fore.CYAN}{Style.BRIGHT}└── 🎯 [Bulgular Koordinatöre (NOVA) Aktarıldı] ─────────────────────────{Style.RESET_ALL}\n")
+                print(f"  {Fore.CYAN}{Style.BRIGHT}└── 🎯 [Bulgular Koordinatöre ({settings.coordinator_name}) Aktarıldı] ─────────────────────────{Style.RESET_ALL}\n")
 
-                user_input += f"\n\n--- [AGENT-REACH CANLI WEB ARAŞTIRMA SONUÇLARI: {search_q}] ---\n{s_results}\n----------------------------------------------------------\nYukarıdaki güncel web araştırma sonuçlarını kullanarak soruma ayrıntılı ve doğru yanıt ver."
+                user_input += f"\n\n--- [AGENT-REACH CANLI WEB ARAŞTIRMA SONUÇLARI (Tarih: {month_year_tr}): {search_q}] ---\n{s_results}\n----------------------------------------------------------\nYukarıdaki güncel web araştırma sonuçlarını kullanarak soruma ayrıntılı ve doğru yanıt ver."
 
             # Koordinatora gonder — streaming
             self.ui.stream_begin(settings.coordinator_name)
@@ -1620,6 +1651,35 @@ class ChatSession:
                 continue
 
             self.ui.stream_end()
+
+            # Koordinatör yanıtında canlı arama çağrısı [SEARCH: ...] varsa çalıştır ve cevabı tamamla
+            search_tool_match = re.search(r'\[SEARCH:\s*([^\]]+)\]', full_text, re.IGNORECASE)
+            if search_tool_match and not start_pipe:
+                tool_q = search_tool_match.group(1).strip()
+                from colorama import Fore, Style
+                self.ui.system(f"🌐 Koordinatör canlı araç araması talep etti: '{tool_q}'...")
+                tool_results = reach_engine.search_web(tool_q, max_results=5)
+                print()
+                print(f"  {Fore.CYAN}{Style.BRIGHT}┌── 🌐 [KOORDİNATÖR ARAÇ ÇAĞRISI (SEARCH: {tool_q})] ──────────────────{Style.RESET_ALL}")
+                for r_line in tool_results.splitlines():
+                    if r_line.strip():
+                        print(f"  {Fore.CYAN}│ {Fore.WHITE}{r_line}{Style.RESET_ALL}")
+                print(f"  {Fore.CYAN}{Style.BRIGHT}└── 🎯 [Araç Bulguları Koordinatöre İletildi] ───────────────────────────{Style.RESET_ALL}\n")
+
+                self.ui.stream_begin(settings.coordinator_name)
+                try:
+                    followup_text, followup_pipe = self.coord.chat(
+                        f"--- [CANLI ARAŞTIRMA SONUÇLARI: {tool_q}] ---\n{tool_results}\nLütfen bu güncel bilgileri kullanarak soruma net yanıt ver.",
+                        on_token=self.ui.stream_token,
+                        allow_pipeline=settings.execution_mode != "interactive",
+                    )
+                    full_text += f"\n\n{followup_text}"
+                    if followup_pipe:
+                        start_pipe = True
+                except Exception as exc:
+                    self.ui.error(f"Arama sonrası LLM hatası: {exc}")
+                finally:
+                    self.ui.stream_end()
 
             # Pipeline dışındaki kod blokları otomatik yazılmaz; kullanıcı
             # /apply ile onaylayana kadar yalnızca bekleyen değişiklik olur.

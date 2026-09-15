@@ -164,6 +164,10 @@ class LogStore:
         # {project_dir_str → sqlite3.Connection}
         self._pool: dict[str, sqlite3.Connection] = {}
 
+    @staticmethod
+    def _fmt_table(headers: list, rows: list, tablefmt: str = "simple") -> str:
+        return _fmt_table(headers, rows, tablefmt=tablefmt)
+
     # ── İç yardımcılar ──────────────────────────────────────────────────────
 
     def _cur_dir(self) -> str:

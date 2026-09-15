@@ -1,19 +1,19 @@
 {
-  "default_model": "ollama/qwen3.8:latest",
+  "default_model": "ollama/ornith-1.5:9b",
   "coordinator_name": "MYF-Agent",
   "think_mode": true,
   "warmup": false,
   "theme": "cyan",
   "temperature": 0.2,
   "max_tokens": 8192,
-  "planning_model": "ollama/qwen3.8:latest",
-  "code_model": "ollama/qwen3.8:latest",
-  "micro_fix_model": "ollama/qwen3.8:latest",
-  "coordinator_model": "ollama/qwen3.8:latest",
+  "planning_model": "ollama/ornith-1.5:9b",
+  "code_model": "ollama/ornith-1.5:9b",
+  "micro_fix_model": "ollama/ornith-1.5:9b",
+  "coordinator_model": "ollama/ornith-1.5:9b",
   "micro_fix_max_tries": 3,
   "full_autonomy_cap": 100,
   "repomap_tokens": 2048,
   "permission_mode": "session_allow",
   "auto_audit_log": true,
-  "execution_mode": "interactive"
+  "execution_mode": "sequential"
 }

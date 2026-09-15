@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "description": "Desteklenen LLM saglayicilari ve her saglayici icin ajan model atamalari ve context window limitleri.",
-  "active_provider": "nvidia",
+  "active_provider": "ollama",
   "providers": {
     "ollama": {
       "label": "Lokal - Ollama",
@@ -11,31 +11,31 @@
       "api_key_env": null,
       "model_prefix": "ollama",
       "requires_key": false,
-      "default_context_window": 32768,
+      "default_context_window": 8192,
       "model_context_windows": {
-        "qwen3.8:latest": 32768,
+        "qwen3.8:latest": 4096,
+        "qwen3.8:27b": 4096,
+        "ornith-1.5:9b": 8192,
         "qwen3.5:4b": 16384,
         "qwen2.5-coder:7b": 32768,
         "qwen2.5-coder:14b": 32768,
-        "qwen3.8:27b": 32768,
-        "qwen3:27b": 32768,
+        "qwen3:27b": 4096,
         "deepseek-r1:8b": 32768,
         "deepseek-r1:14b": 32768,
-        "deepseek-r1:32b": 32768,
-        "ornith-1.5:9b": 32768
+        "deepseek-r1:32b": 4096
       },
       "agent_models": {
-        "coordinator": "ollama/qwen3.8:latest",
-        "product_manager": "ollama/qwen3.8:latest",
-        "software_architect": "ollama/qwen3.8:latest",
-        "developer": "ollama/qwen3.8:latest",
-        "qa_tester": "ollama/qwen3.8:latest",
-        "reviewer": "ollama/qwen3.8:latest",
-        "optimizer": "ollama/qwen3.8:latest",
-        "security_auditor": "ollama/qwen3.8:latest",
-        "documentation_writer": "ollama/qwen3.8:latest",
-        "devops_engineer": "ollama/qwen3.8:latest",
-        "custom": "ollama/qwen3.8:latest"
+        "coordinator": "ollama/ornith-1.5:9b",
+        "product_manager": "ollama/ornith-1.5:9b",
+        "software_architect": "ollama/ornith-1.5:9b",
+        "developer": "ollama/ornith-1.5:9b",
+        "qa_tester": "ollama/ornith-1.5:9b",
+        "reviewer": "ollama/ornith-1.5:9b",
+        "optimizer": "ollama/ornith-1.5:9b",
+        "security_auditor": "ollama/ornith-1.5:9b",
+        "documentation_writer": "ollama/ornith-1.5:9b",
+        "devops_engineer": "ollama/ornith-1.5:9b",
+        "custom": "ollama/ornith-1.5:9b"
       }
     },
     "kimi": {

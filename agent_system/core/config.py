@@ -247,7 +247,7 @@ def _get_agent_models() -> dict:
         f_model = _s.micro_fix_model or default
         coord   = _s.coordinator_model or default
     except Exception:
-        default = "ollama/qwen3.8:latest"
+        default = "ollama/ornith-1.5:9b"
         p_model = c_model = f_model = coord = default
 
     return {

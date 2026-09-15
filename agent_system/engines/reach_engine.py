@@ -137,8 +137,104 @@ class ReachEngine:
         self._url_cache.clear()
 
     # ────────────────────────────────────────────────────────────────
-    # Web Arama (Birincil: DDG HTML, İkincil: DDG Instant Answer JSON)
+    # Web Arama (Resmi Paket Kayıt Defteri + DDG HTML + DDG Lite + DDG Instant Answer)
     # ────────────────────────────────────────────────────────────────
+
+    def _search_package_registry(self, query: str) -> Optional[str]:
+        """
+        NPM veya PyPI paket adı sorgularını doğrudan resmi API'den çeker.
+        Web kazımaya bağımlı kalmadan %100 güncel ve kesin sürüm bilgisi sağlar.
+        """
+        q = query.lower()
+        
+        # NPM paketleri
+        npm_map = {
+            "next": "next", "nextjs": "next", "next.js": "next",
+            "react": "react", "reactjs": "react", "react.js": "react",
+            "react-dom": "react-dom", "typescript": "typescript", "ts": "typescript",
+            "tailwindcss": "tailwindcss", "tailwind": "tailwindcss",
+            "vue": "vue", "vuejs": "vue", "vue.js": "vue",
+            "svelte": "svelte", "sveltekit": "@sveltejs/kit",
+            "express": "express", "prisma": "prisma", "zustand": "zustand",
+            "redux": "redux", "axios": "axios", "vite": "vite",
+            "turbo": "turbo", "turbopack": "turbo", "bun": "bun", "hono": "hono",
+            "nestjs": "@nestjs/core", "remix": "@remix-run/react",
+            "astro": "astro", "shadcn": "shadcn-ui", "lucide": "lucide-react", "zod": "zod"
+        }
+        
+        # PyPI paketleri
+        pypi_map = {
+            "fastapi": "fastapi", "django": "django", "flask": "flask",
+            "pydantic": "pydantic", "sqlalchemy": "sqlalchemy", "celery": "celery",
+            "pytest": "pytest", "requests": "requests", "numpy": "numpy",
+            "pandas": "pandas", "torch": "torch", "pytorch": "torch",
+            "transformers": "transformers", "langchain": "langchain",
+            "litellm": "litellm", "uvicorn": "uvicorn"
+        }
+
+        # Açık npm / pip aramaları
+        explicit_npm = re.search(r'\b(?:npm\s+i(?:nstall)?|package)\s+([a-zA-Z0-9_\-\@\/]+)', q)
+        explicit_pypi = re.search(r'\b(?:pip\s+install|python\s+package)\s+([a-zA-Z0-9_\-]+)', q)
+
+        matched_npm = explicit_npm.group(1) if explicit_npm else None
+        matched_pypi = explicit_pypi.group(1) if explicit_pypi else None
+
+        if not matched_npm and not matched_pypi:
+            tokens = re.findall(r'[a-zA-Z0-9_\.\-]+', q)
+            for t in tokens:
+                if t in npm_map:
+                    matched_npm = npm_map[t]
+                    break
+                elif t in pypi_map:
+                    matched_pypi = pypi_map[t]
+                    break
+
+        results = []
+
+        if matched_npm:
+            try:
+                url = f"https://registry.npmjs.org/{matched_npm}/latest"
+                req = urllib.request.Request(url, headers={"User-Agent": "MYF-Agent/1.0", "Accept": "application/json"})
+                with urllib.request.urlopen(req, timeout=6) as resp:
+                    data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+                    pkg_name = data.get("name", matched_npm)
+                    version = data.get("version", "Bilinmiyor")
+                    desc = data.get("description", "")
+                    license_str = data.get("license", "MIT")
+                    results.append(
+                        f"### 📦 Resmi NPM Kayıt Defteri: `{pkg_name}`\n"
+                        f"- **En Güncel Resmi Sürüm:** `{version}`\n"
+                        f"- **Paket Adresi:** https://www.npmjs.com/package/{pkg_name}\n"
+                        f"- **Açıklama:** {desc}\n"
+                        f"- **Lisans:** {license_str}\n"
+                        f"- **Kurulum:** `npm install {pkg_name}@{version}`\n"
+                    )
+            except Exception as e:
+                logger.debug("NPM registry sorgu hatası: %s", e)
+
+        if matched_pypi:
+            try:
+                url = f"https://pypi.org/pypi/{matched_pypi}/json"
+                req = urllib.request.Request(url, headers={"User-Agent": "MYF-Agent/1.0", "Accept": "application/json"})
+                with urllib.request.urlopen(req, timeout=6) as resp:
+                    data = json.loads(resp.read().decode("utf-8", errors="ignore"))
+                    info = data.get("info", {})
+                    pkg_name = info.get("name", matched_pypi)
+                    version = info.get("version", "Bilinmiyor")
+                    summary = info.get("summary", "")
+                    results.append(
+                        f"### 🐍 Resmi PyPI Kayıt Defteri: `{pkg_name}`\n"
+                        f"- **En Güncel Resmi Sürüm:** `{version}`\n"
+                        f"- **Paket Adresi:** https://pypi.org/project/{pkg_name}/\n"
+                        f"- **Özet:** {summary}\n"
+                        f"- **Kurulum:** `pip install {pkg_name}=={version}`\n"
+                    )
+            except Exception as e:
+                logger.debug("PyPI registry sorgu hatası: %s", e)
+
+        if results:
+            return "\n".join(results)
+        return None
 
     def search_web(self, query: str, max_results: int = 5) -> str:
         """
@@ -156,29 +252,49 @@ class ReachEngine:
 
         logger.info("Web araması yapılıyor: %s", query)
 
+        # 1. Önce resmi paket kayıt defterini (NPM / PyPI) kontrol et
+        pkg_result = self._search_package_registry(query)
+
+        # 2. Birincil kaynak: DuckDuckGo HTML
         result, primary_error = self._search_web_primary(query, max_results)
+
+        # 3. İkincil kaynak: DuckDuckGo Lite
+        if result is None:
+            logger.info("Birincil arama sonuç vermedi (%s), DuckDuckGo Lite deneniyor...", primary_error)
+            result, lite_error = self._search_web_lite(query, max_results)
+        else:
+            lite_error = None
+
+        # 4. Üçüncül kaynak: DuckDuckGo Instant Answer API
+        if result is None:
+            logger.info("Lite arama da sonuç vermedi, DuckDuckGo Instant Answer API deneniyor...")
+            result, secondary_error = self._search_web_fallback(query, max_results)
+        else:
+            secondary_error = None
+
+        # Paket kaydı varsa web sonuçlarıyla birleştir
+        if pkg_result:
+            if result:
+                combined = f"## Canlı Bilgi & Araştırma Sonuçları: {query}\n\n{pkg_result}\n---\n{result}"
+            else:
+                combined = f"## Canlı Paket Araştırma Sonuçları: {query}\n\n{pkg_result}"
+            self._cache_set(self._search_cache, cache_key, combined)
+            return combined
+
         if result is not None:
             self._cache_set(self._search_cache, cache_key, result)
             return result
 
-        # Birincil kaynak basarisiz oldu -> ikincil kaynagi dene
-        logger.warning("Birincil arama kaynağı başarısız (%s), ikincil kaynağa geçiliyor.", primary_error)
-        result, secondary_error = self._search_web_fallback(query, max_results)
-        if result is not None:
-            self._cache_set(self._search_cache, cache_key, result)
-            return result
-
-        # İkisi de başarısız — hatanın GERÇEK nedenini (eksik paket mi, ağ mı) belirt
+        # Tümü başarısız
         if isinstance(primary_error, ImportError):
             msg = (
                 "❌ Web arama başarısız: 'beautifulsoup4' paketi kurulu değil. "
-                "'pip install beautifulsoup4' ile kurup tekrar deneyin. "
-                "(İkincil kaynak da sonuç veremedi.)"
+                "'pip install beautifulsoup4' ile kurup tekrar deneyin."
             )
         else:
             msg = (
                 f"❌ Web araması başarısız oldu (birincil: {primary_error}; "
-                f"ikincil: {secondary_error}). Ağ bağlantısını kontrol edin."
+                f"lite: {lite_error}; ikincil: {secondary_error}). Ağ bağlantısını kontrol edin."
             )
         logger.warning(msg)
         return msg
@@ -189,8 +305,11 @@ class ReachEngine:
             data = urllib.parse.urlencode({"q": query}).encode("utf-8")
             url = "https://html.duckduckgo.com/html/"
             req = urllib.request.Request(url, data=data, headers={
-                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Content-Type": "application/x-www-form-urlencoded"
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Referer": "https://html.duckduckgo.com/"
             })
             with urllib.request.urlopen(req, timeout=12) as resp:
                 html = resp.read().decode("utf-8", errors="ignore")
@@ -204,6 +323,10 @@ class ReachEngine:
                 if title_elem and snippet_elem:
                     title = title_elem.get_text(strip=True)
                     link = title_elem.get("href", "")
+                    if "uddg=" in link:
+                        m = re.search(r'uddg=([^&]+)', link)
+                        if m:
+                            link = urllib.parse.unquote(m.group(1))
                     snippet = snippet_elem.get_text(strip=True)
                     results.append(f"### [{title}]({link})\n{snippet}\n")
                 if len(results) >= max_results:
@@ -218,9 +341,51 @@ class ReachEngine:
             logger.warning("Birincil web arama hatası: %s", exc)
             return None, exc
 
+    def _search_web_lite(self, query: str, max_results: int) -> tuple[Optional[str], Optional[Exception]]:
+        """İkincil HTML kaynak: DuckDuckGo Lite (https://lite.duckduckgo.com/lite/)."""
+        try:
+            data = urllib.parse.urlencode({"q": query}).encode("utf-8")
+            url = "https://lite.duckduckgo.com/lite/"
+            req = urllib.request.Request(url, data=data, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Referer": "https://lite.duckduckgo.com/"
+            })
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                html = resp.read().decode("utf-8", errors="ignore")
+
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html, "html.parser")
+            results = []
+            snippets = [td.get_text(strip=True) for td in soup.select(".result-snippet")]
+            links = []
+            for a in soup.select(".result-link"):
+                href = a.get("href", "")
+                if "uddg=" in href:
+                    m = re.search(r'uddg=([^&]+)', href)
+                    if m:
+                        href = urllib.parse.unquote(m.group(1))
+                links.append((a.get_text(strip=True), href))
+
+            for i in range(min(len(snippets), len(links), max_results)):
+                title, href = links[i]
+                snippet = snippets[i]
+                results.append(f"### [{title}]({href})\n{snippet}\n")
+
+            if results:
+                return f"## Canlı Web Arama Sonuçları (Lite): {query}\n\n" + "\n".join(results), None
+            return None, RuntimeError("Lite kaynak sonuç döndürmedi")
+        except ImportError as exc:
+            return None, exc
+        except Exception as exc:
+            logger.warning("Lite web arama hatası: %s", exc)
+            return None, exc
+
     def _search_web_fallback(self, query: str, max_results: int) -> tuple[Optional[str], Optional[Exception]]:
         """
-        İkincil kaynak: DuckDuckGo Instant Answer JSON API.
+        Üçüncül kaynak: DuckDuckGo Instant Answer JSON API.
         Kapsamı birincil HTML aramasından DAR olabilir (her sorguda sonuç
         garanti etmez) ama HTML yapısı değişse bile çalışmaya devam eder,
         çünkü tamamen farklı bir uç nokta ve format (JSON) kullanır.

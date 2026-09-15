@@ -262,6 +262,7 @@ def call_llm(
                         think_mode=False,
                         temperature=LLM_PARAMS["temperature"],
                         max_tokens=LLM_PARAMS["max_tokens"],
+                        num_ctx=ctx_window,
                     )
                 else:
                     response = completion(
