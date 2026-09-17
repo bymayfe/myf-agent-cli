@@ -16,11 +16,13 @@ logger = logging.getLogger(__name__)
 
 def is_ollama_provider(model: str, api_base: str = "") -> bool:
     """Belirtilen model/api_base Ollama sunucusunu mu işaret ediyor?"""
+    m = (model or "").lower()
+    if m.startswith(("openai/", "openrouter/", "moonshot/", "anthropic/", "gemini/")):
+        return False
     b = (api_base or "").lower()
     # Bulut sağlayıcıları kesinlikle Ollama değildir
     if any(k in b for k in ("nvidia.com", "openrouter.ai", "moonshot.cn", "deepseek.com", "openai.com", "anthropic.com", "googleapis.com")):
         return False
-    m = (model or "").lower()
     return "ollama" in m or "localhost:11434" in b or "127.0.0.1:11434" in b
 
 

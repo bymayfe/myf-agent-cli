@@ -19,6 +19,10 @@ pytest>=7.0.0
 # Gelismis terminal UI
 prompt_toolkit>=3.0.0
 
-# Dis dunya ve web arastirma motoru
-agent-reach>=0.1.0
+# Dis dunya ve web arastirma motoru (Panniantong/Agent-Reach hibrit sistemi)
+# Panniantong/Agent-Reach: kanal probe'ları + V2EX/RSS/Web kanalları
+agent-reach @ git+https://github.com/Panniantong/Agent-Reach.git
+# HTML parsing (DDG ve doğrudan fetch için)
 beautifulsoup4>=4.12.0
+# YouTube metadata ve altyazı
+yt-dlp[default]>=2026.07.04

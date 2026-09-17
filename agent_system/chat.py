@@ -74,6 +74,7 @@ from settings          import settings
 from config            import (print_config, list_providers,
                                 get_active_provider_name,
                                 set_active_provider, reload_config,
+                                list_provider_models, add_provider_model, set_provider_active_model,
                                 PROJECTS_BASE_DIR, get_output_dir)
 from coordinator_agent import CoordinatorAgent
 from agents            import load_agents
@@ -470,11 +471,98 @@ class CommandHub:
         print(ChatUI._c(CommandRegistry.get_help_text(), Fore.WHITE))
 
     def _search_web(self, query: str):
+        """
+        /search veya /reach komutu — akıllı yönlendirici.
+
+        Alt komutlar:
+          /reach github <sorgu>   → GitHub repo arama (gh CLI)
+          /reach youtube <url>    → YouTube metadata + altyazı
+          /reach v2ex [sorgu]     → V2EX hot topics
+          /reach rss <url>        → RSS/Atom besleme okuma
+          /reach twitter <sorgu> → Twitter/X arama (cookie gerekir)
+          /reach reddit <sorgu>  → Reddit arama (cookie gerekir)
+          /reach status           → Kanal durumu tablosu
+          /reach web <sorgu>      → Sadece DDG web arama
+          /reach <genel sorgu>    → Otomatik kanal seçimi
+        """
         if not query:
-            self.ui.system("Kullanim: /search <arama_terimi> veya /search site:github.com <proje>")
+            self.ui.system(
+                "Kullanım: /reach <sorgu>\n"
+                "  /reach github <sorgu>    → GitHub repo arama\n"
+                "  /reach youtube <url>     → YouTube video okuma\n"
+                "  /reach v2ex              → V2EX hot topics\n"
+                "  /reach rss <url>         → RSS besleme okuma\n"
+                "  /reach twitter <sorgu>   → Twitter arama\n"
+                "  /reach reddit <sorgu>    → Reddit arama\n"
+                "  /reach status            → Kanal durumu\n"
+                "  /reach web <sorgu>       → Web arama"
+            )
             return
-        self.ui.system(f"🌐 Web / GitHub uzerinde guvenli arastirma yapiliyor: {query}...")
-        res = reach_engine.search_web(query)
+
+        # Alt komut parse
+        parts = query.strip().split(maxsplit=1)
+        sub   = parts[0].lower()
+        rest  = parts[1].strip() if len(parts) > 1 else ""
+
+        if sub == "status":
+            self.ui.system("📡 Kanal durumu kontrol ediliyor...")
+            print(f"\n{reach_engine.format_channel_status()}\n")
+            return
+
+        if sub == "github":
+            if not rest:
+                self.ui.error("Kullanım: /reach github <sorgu>")
+                return
+            self.ui.system(f"🐙 GitHub'da aranıyor: {rest}")
+            print(f"\n{reach_engine.search_github(rest)}\n")
+            return
+
+        if sub == "youtube":
+            if not rest:
+                self.ui.error("Kullanım: /reach youtube <url>")
+                return
+            self.ui.system(f"🎬 YouTube okunuyor: {rest}")
+            print(f"\n{reach_engine.read_youtube(rest)}\n")
+            return
+
+        if sub == "v2ex":
+            self.ui.system("🔥 V2EX hot topics alınıyor...")
+            print(f"\n{reach_engine.search_v2ex(rest)}\n")
+            return
+
+        if sub == "rss":
+            if not rest:
+                self.ui.error("Kullanım: /reach rss <url>")
+                return
+            self.ui.system(f"📰 RSS okunuyor: {rest}")
+            print(f"\n{reach_engine.read_rss(rest)}\n")
+            return
+
+        if sub == "twitter":
+            if not rest:
+                self.ui.error("Kullanım: /reach twitter <sorgu>")
+                return
+            self.ui.system(f"🐦 Twitter'da aranıyor: {rest}")
+            print(f"\n{reach_engine.search_twitter(rest)}\n")
+            return
+
+        if sub == "reddit":
+            if not rest:
+                self.ui.error("Kullanım: /reach reddit <sorgu>")
+                return
+            self.ui.system(f"📕 Reddit'te aranıyor: {rest}")
+            print(f"\n{reach_engine.search_reddit(rest)}\n")
+            return
+
+        if sub == "web":
+            target = rest or query
+            self.ui.system(f"🌐 Web'de aranıyor: {target}")
+            print(f"\n{reach_engine.search_web(target)}\n")
+            return
+
+        # Genel → akıllı yönlendirici
+        self.ui.system(f"🌐 Araştırılıyor: {query}...")
+        res = reach_engine.search(query)
         print(f"\n{res}\n")
 
     def _web_cmd(self, _=None):
@@ -956,13 +1044,19 @@ class CommandHub:
                 if key_env:
                     os.environ[key_env] = cfg_key
 
+            if active_key:
+                masked = active_key[:8] + "..." + active_key[-4:] if len(active_key) > 12 else "***"
+                print(c(f"  ✓ Kayıtlı API anahtarı: {masked}", Fore.GREEN))
+                change = input(c(f"  Anahtarı değiştirmek ister misiniz? [e/H]: ", Fore.YELLOW)).strip().lower()
+                if change in ("e", "evet", "y", "yes"):
+                    active_key = ""
+
             if not active_key:
                 print(c(f"\n  [!] {chosen['label']} için API anahtarı gerekiyor.", Fore.YELLOW))
                 user_key = input(c(f"  API Anahtarını girin ({key_env or 'API_KEY'}) / Enter=iptal: ", Fore.CYAN)).strip()
                 if user_key:
                     if key_env:
                         os.environ[key_env] = user_key
-                        # .env dosyasına kalıcı kaydet
                         env_file = Path(__file__).parent / ".env"
                         try:
                             lines = env_file.read_text(encoding="utf-8").splitlines() if env_file.exists() else []
@@ -975,10 +1069,43 @@ class CommandHub:
                     ui.error(f"API key girilmedi. Sağlayıcı değiştirilemedi.")
                     return
 
+        # Sağlayıcıyı aktif et
         set_active_provider(name)
+
+        # ── Kayıtlı Modelleri Listele veya Yeni Model Ekle ──
+        saved_models = list_provider_models(name)
+        active_model = settings.default_model
+
+        print(c(f"\n  📋 {chosen['label']} - KAYITLI MODELLER", Fore.CYAN, Style.BRIGHT))
+        print(c("  " + "-" * 50, Fore.CYAN))
+        for m_i, m_name in enumerate(saved_models, 1):
+            is_cur = (m_name in active_model or active_model.endswith(m_name))
+            m_mark = c(" << AKTİF", Fore.GREEN, Style.BRIGHT) if is_cur else ""
+            print(f"  {m_i}. {c(m_name, Fore.WHITE)}{m_mark}")
+        add_option_idx = len(saved_models) + 1
+        print(f"  {add_option_idx}. {c('[+ Yeni Model Ekle / Özel İsim Gir]', Fore.YELLOW, Style.BRIGHT)}")
+        print()
+
+        m_secim = input(c(f"  Model seçin [1-{add_option_idx}, Enter=varsayılan]: ", Fore.CYAN)).strip()
+        selected_model = None
+
+        if m_secim.isdigit():
+            m_val = int(m_secim)
+            if 1 <= m_val <= len(saved_models):
+                selected_model = saved_models[m_val - 1]
+            elif m_val == add_option_idx:
+                new_m_name = input(c("  Yeni Model Adı (Örn: nvidia/nemotron-3.5-lightning-30b-a3b): ", Fore.YELLOW)).strip()
+                if new_m_name:
+                    add_provider_model(name, new_m_name)
+                    selected_model = new_m_name
+                    ui.success(f"Yeni model '{new_m_name}' kayıtlı modeller listesine eklendi!")
+
+        if selected_model:
+            set_provider_active_model(name, selected_model)
+
         reload_config()
         self.coord.refresh_settings()
-        ui.success(f"Saglayici: {chosen['label']}")
+        ui.success(f"Sağlayıcı: {chosen['label']} | Aktif Model: {settings.default_model}")
 
     def _quota_cmd(self, _):
         """Tüm sağlayıcıların kota, bakiye ve oturum kullanım durumunu raporlar."""

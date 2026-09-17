@@ -204,6 +204,67 @@ def list_providers() -> list[dict]:
     return result
 
 
+def list_provider_models(provider_name: str = None) -> list[str]:
+    """Sağlayıcıya kayıtlı model listesini döndürür."""
+    data = load_providers()
+    name = provider_name or get_active_provider_name()
+    p_data = data.get("providers", {}).get(name, {})
+    return list(p_data.get("model_context_windows", {}).keys())
+
+
+def add_provider_model(provider_name: str, model_name: str, context_window: int = 131072) -> str:
+    """Sağlayıcıya yeni bir model ekler ve hem CLI hem Web UI yapılandırmasına kalıcı kaydeder."""
+    data = load_providers()
+    if provider_name not in data.get("providers", {}):
+        raise ValueError(f"Bilinmeyen sağlayıcı: {provider_name}")
+    p_data = data["providers"][provider_name]
+    if "model_context_windows" not in p_data:
+        p_data["model_context_windows"] = {}
+    p_data["model_context_windows"][model_name] = context_window
+    save_providers(data)
+
+    # Web UI data/providers_config.json dosyasını da senkronize et (varsa)
+    web_providers_path = _SYSTEM_ROOT.parent / "web_ui" / "data" / "providers_config.json"
+    if web_providers_path.exists():
+        try:
+            with open(web_providers_path, "r", encoding="utf-8") as wf:
+                wdata = json.load(wf)
+            if provider_name in wdata.get("providers", {}):
+                if "model_context_windows" not in wdata["providers"][provider_name]:
+                    wdata["providers"][provider_name]["model_context_windows"] = {}
+                wdata["providers"][provider_name]["model_context_windows"][model_name] = context_window
+                with open(web_providers_path, "w", encoding="utf-8") as wf:
+                    json.dump(wdata, wf, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    return model_name
+
+
+def set_provider_active_model(provider_name: str, model_name: str) -> str:
+    """Sağlayıcının varsayılan agent_models'ini günceller ve settings ile senkronize eder."""
+    data = load_providers()
+    if provider_name not in data.get("providers", {}):
+        raise ValueError(f"Bilinmeyen sağlayıcı: {provider_name}")
+    p_data = data["providers"][provider_name]
+    prefix = p_data.get("model_prefix", "")
+    full_model_id = model_name
+    if prefix and not model_name.startswith(f"{prefix}/"):
+        full_model_id = f"{prefix}/{model_name}"
+
+    if "agent_models" in p_data:
+        for role in p_data["agent_models"]:
+            p_data["agent_models"][role] = full_model_id
+    save_providers(data)
+
+    try:
+        from settings import settings
+        settings.default_model = full_model_id
+    except Exception:
+        pass
+    return full_model_id
+
+
 # ─────────────────────────────────────────────
 # LLM Parametreleri
 # ─────────────────────────────────────────────

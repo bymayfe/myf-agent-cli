@@ -281,15 +281,26 @@ class CoordinatorAgent:
             )
         else:
             from litellm import completion
-            resp = completion(
-                model=model,
-                messages=messages,
-                temperature=settings.temperature,
-                max_tokens=min(settings.max_tokens, 2048),
-                api_base=LLM_PARAMS["api_base"],
-                api_key=LLM_PARAMS["api_key"],
-                stream=True,
-            )
+            comp_kwargs = {
+                "model": model,
+                "messages": messages,
+                "temperature": settings.temperature,
+                "max_tokens": max(settings.max_tokens, 4096) if settings.think_mode else settings.max_tokens,
+                "api_base": LLM_PARAMS["api_base"],
+                "api_key": LLM_PARAMS["api_key"],
+                "stream": True,
+            }
+            # Nemotron, Kimi-K3, DeepSeek modelleri için akıl yürütme (thinking) parametreleri
+            is_thinking_model = any(k in model.lower() for k in ("nemotron", "deepseek", "kimi", "r1"))
+            if settings.think_mode or is_thinking_model:
+                comp_kwargs["extra_body"] = {
+                    "chat_template_kwargs": {"enable_thinking": True},
+                    "reasoning_budget": min(settings.max_tokens, 16384),
+                }
+
+            from llm_client import ColdStartWatcher
+            with ColdStartWatcher(model):
+                resp = completion(**comp_kwargs)
             full_text = ""
             try:
                 for chunk in resp:

@@ -24,6 +24,51 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 warnings.filterwarnings("ignore", category=UserWarning, module="litellm")
 
 logger = logging.getLogger(__name__)
+import threading
+
+
+class ColdStartWatcher:
+    """
+    Bulut API veya yerel model çağrılarında cold start / gecikmeleri
+    terminalde şeffaf ve canlı sayaçla gösteren yardımcı bağlam yöneticisi.
+    """
+    def __init__(self, model_name: str, threshold: float = 4.0):
+        self.model_name = model_name
+        self.threshold = threshold
+        self._stop_event = threading.Event()
+        self._thread = None
+        self._start_time = 0.0
+
+    def __enter__(self):
+        self._start_time = time.time()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._stop_event.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=0.2)
+        elapsed = time.time() - self._start_time
+        if elapsed >= self.threshold:
+            print(f" (Tamamlandı: {elapsed:.1f}s)", flush=True)
+
+    def _run(self):
+        intervals = [4, 8, 15, 25, 40, 60]
+        idx = 0
+        while not self._stop_event.is_set():
+            elapsed = int(time.time() - self._start_time)
+            if idx < len(intervals) and elapsed >= intervals[idx]:
+                target = intervals[idx]
+                if target <= 8:
+                    print(f"\n  [INFO] ⏳ Sağlayıcıya bağlanıldı, yanıt bekleniyor ({elapsed}s)...", end="", flush=True)
+                elif target <= 20:
+                    print(f"\n  [INFO] 🚀 Model uyandırılıyor (Cold-Start / Kuyruk bekleniyor - {elapsed}s)...", end="", flush=True)
+                else:
+                    print(f"\n  [INFO] ⏳ Bulut sağlayıcı kuyruğu yoğun ({elapsed}s), lütfen bekleyin...", end="", flush=True)
+                idx += 1
+            time.sleep(0.5)
+
 
 
 # ─── Bilinen modeller için genel fallback context window sözlüğü ────────────
@@ -277,7 +322,16 @@ def call_llm(
                     }
                     if "top_p" in LLM_PARAMS and LLM_PARAMS["top_p"] is not None:
                         completion_kwargs["top_p"] = LLM_PARAMS["top_p"]
-                    response = completion(**completion_kwargs)
+
+                    is_thinking_model = any(k in current_model.lower() for k in ("nemotron", "deepseek", "kimi", "r1"))
+                    if is_thinking_model:
+                        completion_kwargs["extra_body"] = {
+                            "chat_template_kwargs": {"enable_thinking": True},
+                            "reasoning_budget": min(LLM_PARAMS["max_tokens"], 16384),
+                        }
+
+                    with ColdStartWatcher(current_model):
+                        response = completion(**completion_kwargs)
                     content = response.choices[0].message.content
 
                 print(f"  [{agent_name}] Yanit alindi.")

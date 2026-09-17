@@ -4,6 +4,20 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.1.0] - 2026-09-17
+
+### 🌐 Agent-Reach Hibrit Arama & Platform Entegrasyonu
+- **Panniantong/Agent-Reach Entegrasyonu:**
+  - Jina Reader ve DuckDuckGo tabanlı arama motoruna GitHub (`gh`), YouTube (`yt-dlp`), V2EX, RSS/Atom, Reddit ve Twitter kanalları entegre edildi (`reach_engine.py`).
+  - Akıllı yönlendirici (`reach_engine.search`) sorguyu veya URL'i inceleyerek en uygun platform kanalına otomatik yönlendirir; eksik araç durumunda DDG/Jina fallback yapar.
+  - `/reach github`, `/reach youtube`, `/reach v2ex`, `/reach rss`, `/reach status` alt komutları eklendi.
+  - Bağımlılık kurulum aracı eklendi (`reach_setup.py`).
+
+### ⏱️ Cold-Start & Bulut API Gecikme İzleyicisi (ColdStartWatcher)
+- **Canlı Terminal İzleme:**
+  - `llm_client.py` ve `coordinator_agent.py` içine `ColdStartWatcher` bağlam yöneticisi entegre edildi.
+  - Bulut API'si (NVIDIA NIM, Moonshot vb.) veya yerel büyük modeller uyanırken/kuyrukta beklerken terminalde canlı süre sayacı ve bilgilendirme basılır.
+
 ## [1.0.0] - 2026-09-03
 
 ### 🎉 İlk Kararlı Sürüm (Initial Public Release)

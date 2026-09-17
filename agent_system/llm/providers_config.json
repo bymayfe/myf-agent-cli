@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "description": "Desteklenen LLM saglayicilari ve her saglayici icin ajan model atamalari ve context window limitleri.",
-  "active_provider": "ollama",
+  "active_provider": "nvidia",
   "providers": {
     "ollama": {
       "label": "Lokal - Ollama",
@@ -16,7 +16,7 @@
         "qwen3.8:latest": 4096,
         "qwen3.8:27b": 4096,
         "ornith-1.5:9b": 8192,
-        "qwen3.5:4b": 16384,
+        "qwen3.5:4b": 8192,
         "qwen2.5-coder:7b": 32768,
         "qwen2.5-coder:14b": 32768,
         "qwen3:27b": 4096,
@@ -25,17 +25,17 @@
         "deepseek-r1:32b": 4096
       },
       "agent_models": {
-        "coordinator": "ollama/ornith-1.5:9b",
-        "product_manager": "ollama/ornith-1.5:9b",
-        "software_architect": "ollama/ornith-1.5:9b",
-        "developer": "ollama/ornith-1.5:9b",
-        "qa_tester": "ollama/ornith-1.5:9b",
-        "reviewer": "ollama/ornith-1.5:9b",
-        "optimizer": "ollama/ornith-1.5:9b",
-        "security_auditor": "ollama/ornith-1.5:9b",
-        "documentation_writer": "ollama/ornith-1.5:9b",
-        "devops_engineer": "ollama/ornith-1.5:9b",
-        "custom": "ollama/ornith-1.5:9b"
+        "coordinator": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "product_manager": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "software_architect": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "developer": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "qa_tester": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "reviewer": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "optimizer": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "security_auditor": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "documentation_writer": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "devops_engineer": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "custom": "openai/nvidia/nemotron-3.5-lightning-30b-a3b"
       }
     },
     "kimi": {
@@ -128,30 +128,32 @@
       "label": "API - NVIDIA NIM (DGX Cloud H100)",
       "description": "NVIDIA NIM uzerinde DeepSeek V4, Nemotron ve acik modeller. Ucretsiz 1000 kredi.",
       "api_base": "https://integrate.api.nvidia.com/v1",
-      "api_key": "",
+      "api_key": "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",
       "api_key_env": "NVIDIA_API_KEY",
       "model_prefix": "openai",
       "requires_key": true,
       "key_url": "https://build.nvidia.com",
-      "default_context_window": 65536,
+      "default_context_window": 131072,
       "model_context_windows": {
+        "nvidia/nemotron-3.5-lightning-30b-a3b": 131072,
+        "moonshotai/kimi-k3": 131072,
         "deepseek-ai/deepseek-v4-pro-0813": 65536,
         "deepseek-ai/deepseek-v4-flash-0731": 65536,
         "mistralai/codestral-22b-instruct-v0.1": 32768,
         "nvidia/llama-3.1-nemotron-70b-instruct": 131072
       },
       "agent_models": {
-        "coordinator": "openai/deepseek-ai/deepseek-v4-pro-0813",
-        "product_manager": "openai/deepseek-ai/deepseek-v4-pro-0813",
-        "software_architect": "openai/deepseek-ai/deepseek-v4-pro-0813",
-        "developer": "openai/deepseek-ai/deepseek-v4-pro-0813",
-        "qa_tester": "openai/deepseek-ai/deepseek-v4-pro-0813",
-        "reviewer": "openai/deepseek-ai/deepseek-v4-pro-0813",
-        "optimizer": "openai/deepseek-ai/deepseek-v4-pro-0813",
-        "security_auditor": "openai/deepseek-ai/deepseek-v4-pro-0813",
-        "documentation_writer": "openai/deepseek-ai/deepseek-v4-pro-0813",
-        "devops_engineer": "openai/deepseek-ai/deepseek-v4-pro-0813",
-        "custom": "openai/deepseek-ai/deepseek-v4-pro-0813"
+        "coordinator": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "product_manager": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "software_architect": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "developer": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "qa_tester": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "reviewer": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "optimizer": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "security_auditor": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "documentation_writer": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "devops_engineer": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
+        "custom": "openai/nvidia/nemotron-3.5-lightning-30b-a3b"
       }
     },
     "llama_cpp": {
