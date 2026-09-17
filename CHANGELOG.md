@@ -4,6 +4,16 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.2.0] - 2026-09-17
+
+### 📦 NPM & PyPI Resmi Registry Normalizasyonu ve Squat Filtresi
+- **Terk Edilmiş Kukla Paket (0.0.3) Önleme:**
+  - NPM kayıt defterinde 12 yıl önce terk edilmiş `nextjs: 0.0.3` gibi sahte/kukla paketlerin DuckDuckGo arama sonuçlarında ve registry sorgularında gerçek Next.js (v16.3.5) yerine geçmesi engellendi.
+  - `_SQUAT_URL_PATTERN` ile `npmjs.com/package/(nextjs|reactjs|vuejs|expressjs)` bağlantıları web arama sonuçlarından elendi.
+  - `nextjs`, `next.js` → `next`; `reactjs` → `react`; `vuejs` → `vue`; `tailwind` → `tailwindcss`; `sveltekit` → `@sveltejs/kit`; `nestjs` → `@nestjs/core`; `expressjs` → `express`; `angularjs` → `@angular/core` alias eşleştirmeleri tamamlandı.
+  - Açık paket arama komutları (`package nextjs`, `npm i nextjs`, `pnpm add`, `yarn add`, `pip install`) zorunlu alias süzgecinden geçirildi.
+- **Birim Testleri:** `test_enhancements.py` içine paket adı normalizasyonu ve squat URL filtreleme testleri eklenerek tüm 74 test yeşile çekildi.
+
 ## [1.1.0] - 2026-09-17
 
 ### 🌐 Agent-Reach Hibrit Arama & Platform Entegrasyonu

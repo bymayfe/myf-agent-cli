@@ -1742,6 +1742,37 @@ def test_reach_engine_blocked_extensions_never_reach_network():
     mock_perm.assert_not_called()  # izin kontrolüne bile gitmemeli
 
 
+def test_reach_engine_normalizes_package_aliases_and_filters_squat_urls():
+    from unittest.mock import patch, MagicMock
+    from reach_engine import ReachEngine
+
+    engine = ReachEngine()
+
+    # Mock urllib response for npm registry
+    fake_npm_json = b'{"name": "next", "version": "16.3.5", "description": "The React Framework", "license": "MIT"}'
+    fake_resp = MagicMock()
+    fake_resp.read.return_value = fake_npm_json
+    fake_resp.__enter__.return_value = fake_resp
+
+    with patch("urllib.request.urlopen", return_value=fake_resp), \
+         patch("reach_engine.permission_manager.check_permission", return_value=True), \
+         patch.object(ReachEngine, "_search_web_primary", return_value=(None, RuntimeError("skip"))), \
+         patch.object(ReachEngine, "_search_web_lite", return_value=(None, RuntimeError("skip"))), \
+         patch.object(ReachEngine, "_search_web_fallback", return_value=(None, RuntimeError("skip"))):
+
+        # "nextjs" alias should normalize to "next"
+        res1 = engine.search_web("package nextjs")
+        assert "📦 NPM: `next`" in res1
+        assert "16.3.5" in res1
+        assert "0.0.3" not in res1
+
+        # explicit npm command "npm i nextjs"
+        res2 = engine.search_web("npm i nextjs")
+        assert "📦 NPM: `next`" in res2
+        assert "16.3.5" in res2
+
+
+
 def test_quota_engine_record_usage_and_session_stats():
     from engines.quota_engine import QuotaEngine
     engine = QuotaEngine()

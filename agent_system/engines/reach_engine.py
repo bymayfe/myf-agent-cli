@@ -77,6 +77,12 @@ _RSS_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
+# Squat / yanıltıcı paket bağlantılarını filtreleme deseni (örn. 12 yıl önceki terk edilmiş 'nextjs' 0.0.3 paketi)
+_SQUAT_URL_PATTERN = re.compile(
+    r'https?://(?:www\.)?npmjs\.com/package/(?:nextjs|reactjs|vuejs|expressjs)(?:[/?#]|$)',
+    re.IGNORECASE,
+)
+
 
 # ──────────────────────────────────────────────────────────────
 # HTML → Metin yardımcısı
@@ -360,15 +366,20 @@ class ReachEngine:
         npm_map = {
             "next": "next", "nextjs": "next", "next.js": "next",
             "react": "react", "reactjs": "react", "react-dom": "react-dom",
+            "reactdom": "react-dom",
             "typescript": "typescript", "tailwindcss": "tailwindcss",
             "tailwind": "tailwindcss", "vue": "vue", "vuejs": "vue",
-            "svelte": "svelte", "sveltekit": "@sveltejs/kit",
-            "express": "express", "prisma": "prisma", "zustand": "zustand",
+            "vue.js": "vue", "svelte": "svelte", "sveltekit": "@sveltejs/kit",
+            "svelte-kit": "@sveltejs/kit", "express": "express",
+            "expressjs": "express", "express.js": "express",
+            "prisma": "prisma", "zustand": "zustand",
             "redux": "redux", "axios": "axios", "vite": "vite",
             "turbo": "turbo", "bun": "bun", "hono": "hono",
-            "nestjs": "@nestjs/core", "remix": "@remix-run/react",
-            "astro": "astro", "shadcn": "shadcn-ui",
-            "lucide": "lucide-react", "zod": "zod",
+            "nestjs": "@nestjs/core", "nest.js": "@nestjs/core",
+            "remix": "@remix-run/react", "remix.run": "@remix-run/react",
+            "astro": "astro", "shadcn": "shadcn-ui", "shadcn-ui": "shadcn-ui",
+            "lucide": "lucide-react", "lucide-react": "lucide-react", "zod": "zod",
+            "angular": "@angular/core", "angularjs": "@angular/core",
         }
         pypi_map = {
             "fastapi": "fastapi", "django": "django", "flask": "flask",
@@ -380,11 +391,16 @@ class ReachEngine:
             "uvicorn": "uvicorn",
         }
 
-        explicit_npm  = re.search(r'\b(?:npm\s+i(?:nstall)?|package)\s+([a-zA-Z0-9_\-\@\/]+)', q)
+        explicit_npm  = re.search(r'\b(?:npm\s+(?:i|install)|yarn\s+add|pnpm\s+add|bun\s+add|package)\s+([a-zA-Z0-9_\-\@\/]+)', q)
         explicit_pypi = re.search(r'\b(?:pip\s+install|python\s+package)\s+([a-zA-Z0-9_\-]+)', q)
 
         matched_npm  = explicit_npm.group(1)  if explicit_npm  else None
         matched_pypi = explicit_pypi.group(1) if explicit_pypi else None
+
+        if matched_npm:
+            matched_npm = npm_map.get(matched_npm.lower(), matched_npm)
+        if matched_pypi:
+            matched_pypi = pypi_map.get(matched_pypi.lower(), matched_pypi)
 
         if not matched_npm and not matched_pypi:
             tokens = re.findall(r'[a-zA-Z0-9_\.\-]+', q)
@@ -468,6 +484,8 @@ class ReachEngine:
                         m = re.search(r'uddg=([^&]+)', link)
                         if m:
                             link = urllib.parse.unquote(m.group(1))
+                    if _SQUAT_URL_PATTERN.search(link):
+                        continue
                     snippet = snippet_elem.get_text(strip=True)
                     results.append(f"### [{title}]({link})\n{snippet}\n")
                 if len(results) >= max_results:
@@ -511,9 +529,14 @@ class ReachEngine:
                 links.append((a.get_text(strip=True), href))
 
             results = []
-            for i in range(min(len(snippets), len(links), max_results)):
+            for i in range(len(links)):
                 title, href = links[i]
-                results.append(f"### [{title}]({href})\n{snippets[i]}\n")
+                if _SQUAT_URL_PATTERN.search(href):
+                    continue
+                snippet = snippets[i] if i < len(snippets) else ""
+                results.append(f"### [{title}]({href})\n{snippet}\n")
+                if len(results) >= max_results:
+                    break
 
             if results:
                 return f"## 🌐 Web Arama (Lite): {query}\n\n" + "\n".join(results), None
@@ -543,9 +566,14 @@ class ReachEngine:
                     f"### {payload.get('Heading', query)}\n{payload['AbstractText']}\n"
                     f"({payload.get('AbstractURL', '')})\n"
                 )
-            for topic in payload.get("RelatedTopics", [])[:max_results]:
+            for topic in payload.get("RelatedTopics", []):
                 if isinstance(topic, dict) and topic.get("Text"):
-                    results.append(f"- {topic['Text']} ({topic.get('FirstURL', '')})")
+                    first_url = topic.get("FirstURL", "")
+                    if _SQUAT_URL_PATTERN.search(first_url):
+                        continue
+                    results.append(f"- {topic['Text']} ({first_url})")
+                    if len(results) >= max_results:
+                        break
 
             if results:
                 return (
