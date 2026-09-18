@@ -14,14 +14,13 @@ import time
 import contextlib
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Any
 
 if sys.platform != "win32":
     import fcntl
 else:
     import msvcrt
 
-from config import get_output_dir
+from config import get_output_dir, set_output_dir, PROJECTS_BASE_DIR
 
 
 import logging

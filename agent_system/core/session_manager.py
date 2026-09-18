@@ -21,7 +21,7 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-from config import PROJECTS_BASE_DIR, set_output_dir, get_output_dir
+from config import PROJECTS_BASE_DIR, set_output_dir
 
 
 def _slugify(text: str, max_len: int = 30) -> str:

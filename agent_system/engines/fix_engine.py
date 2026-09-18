@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Optional
 
 from config import (
-    MICRO_FIX_MODEL,
     ESCALATION_MODEL,
     MICRO_FIX_MAX_TRIES,
 )
@@ -26,7 +25,7 @@ from codebase_graph import build_repomap
 from code_parser import extract_code_blocks
 from log_store import log_store
 from test_runner import CodeVerifier
-from git_guard import GitGuard, git_guard
+from git_guard import GitGuard
 
 logger = logging.getLogger("fix_engine")
 

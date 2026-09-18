@@ -641,7 +641,7 @@ class LogStore:
         errors = self._fetch(str(p_dir), "SELECT * FROM error_events ORDER BY created_at ASC")
         
         lines = [
-            f"# Multi-Agent Proje Denetim ve Süreç Günlüğü (Audit Log)",
+            "# Multi-Agent Proje Denetim ve Süreç Günlüğü (Audit Log)",
             f"**Oluşturulma Tarihi:** {_now()}  ",
             f"**Proje Dizini:** `{p_dir}`  ",
             f"**Toplam Adım Sayısı:** {len(steps)}  ",

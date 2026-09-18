@@ -17,7 +17,6 @@ import json
 import time
 import tempfile
 import logging
-import subprocess
 from pathlib import Path
 from datetime import datetime
 
@@ -36,9 +35,6 @@ for _sub in [_HERE, _HERE / "core", _HERE / "engines", _HERE / "agents", _HERE /
 
 from config import (
     get_output_dir,
-    MICRO_FIX_MODEL,
-    ESCALATION_MODEL,
-    MICRO_FIX_MAX_TRIES,
 )
 from settings import settings
 from llm_client import call_llm
@@ -49,19 +45,18 @@ from brain import (
     write_output_file,
     list_output_files,
 )
-from codebase_graph import build_repomap, codebase_graph
-from code_parser import UniversalCodeParser, extract_code_blocks, extract_planned_files_from_architecture
-from test_runner import CodeVerifier, run_code_verification_tests
-from fix_engine import Fix, fix_engine, MicroFixEngine, EscalationEngine
+from codebase_graph import build_repomap
+from code_parser import extract_code_blocks, extract_planned_files_from_architecture
+from test_runner import run_code_verification_tests
+from fix_engine import fix_engine, MicroFixEngine, EscalationEngine
 from profiling_engine import ProfilingEngine, StuckLoopDetector
 from agents import (
     load_agents,
     build_agent_prompt,
     extract_changelog,
-    AgentDefinition,
 )
 from log_store import log_store
-from git_guard import GitGuard, git_guard
+from git_guard import GitGuard
 
 logger = logging.getLogger("pipeline")
 
@@ -272,7 +267,7 @@ def load_checkpoint(project_dir: str) -> dict | None:
             data["file_write_status"] = "committed"
 
         if data.get("file_write_status") == "pending":
-            print(f"\n  ⚠️  [CHECKPOINT-RECOVERY] Yarım kalmış bir dosya yazımı (pending) tespit edildi!")
+            print("\n  ⚠️  [CHECKPOINT-RECOVERY] Yarım kalmış bir dosya yazımı (pending) tespit edildi!")
             completed = data.get("completed_roles", [])
             pending_role = data.get("current_role")
 
@@ -288,7 +283,7 @@ def load_checkpoint(project_dir: str) -> dict | None:
                 save_checkpoint(project_dir, data)
             else:
                 logger.error("Kurtarma yapılamadı: Yarım kalan adım (current_role) tespit edilemedi.")
-                print(f"  ❌ [CHECKPOINT-ERROR] Kurtarma yapılamadı: Yarım kalan adım tespit edilemedi. Checkpoint'i manuel kontrol edin.")
+                print("  ❌ [CHECKPOINT-ERROR] Kurtarma yapılamadı: Yarım kalan adım tespit edilemedi. Checkpoint'i manuel kontrol edin.")
                 data["file_write_status"] = "unrecoverable_pending"
 
         return data
@@ -627,7 +622,7 @@ def run_pipeline(
                         if fixed:
                             post_test = _run_code_verification_tests(output_dir)
                             if not post_test.get("error"):
-                                print(f"  ✓ [FIX ENGINE] Hata basariyla cozuldu!")
+                                print("  ✓ [FIX ENGINE] Hata basariyla cozuldu!")
                                 test_results["resolved"] = True
                                 log_store.resolve_error(err_id, resolver="fix_engine")
                                 error_history.clear()
@@ -804,7 +799,7 @@ def run_pipeline(
                         queue.insert(0, dev_agent)
                         feedback_msg = f"## QA TEST RAPORU (Deneme {retry_count}/{MAX_QA_RETRIES})\n{raw[:3000]}\n"
                         if missing_files:
-                            feedback_msg += f"\n🚨 MİMARİDE PLANLANAN ANCAK HENÜZ YAZILMAMIŞ EKSİK DOSYALAR:\n" + "\n".join(f"- {f}" for f in missing_files) + "\n"
+                            feedback_msg += "\n🚨 MİMARİDE PLANLANAN ANCAK HENÜZ YAZILMAMIŞ EKSİK DOSYALAR:\n" + "\n".join(f"- {f}" for f in missing_files) + "\n"
                         if "last_test_error" in context:
                             feedback_msg += f"\n## FIZIKSEL TEST HATASI\n{context['last_test_error'][:1500]}\n"
 

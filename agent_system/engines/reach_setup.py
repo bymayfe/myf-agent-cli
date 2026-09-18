@@ -3,7 +3,6 @@ reach_setup.py - Agent-Reach ve yan araçlarının kurulumunu sağlar.
 """
 import subprocess
 import sys
-from pathlib import Path
 
 def setup_reach_channels(channels=None):
     """Eksik bağımlılıkları venv içine kurar."""

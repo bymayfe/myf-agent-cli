@@ -28,8 +28,6 @@ from pathlib import Path
 from typing import Optional, Any
 import warnings
 import logging
-import threading
-from typing import Callable
 
 if sys.platform == "win32":
     try:
@@ -63,7 +61,6 @@ try:
     from prompt_toolkit             import prompt as _pt_prompt
     from prompt_toolkit.completion  import WordCompleter
     from prompt_toolkit.history     import InMemoryHistory
-    from prompt_toolkit.styles      import Style as PtStyle
     from prompt_toolkit.formatted_text import ANSI
     _HAS_PT = True
 except ImportError:
@@ -75,11 +72,11 @@ from config            import (print_config, list_providers,
                                 get_active_provider_name,
                                 set_active_provider, reload_config,
                                 list_provider_models, add_provider_model, set_provider_active_model,
-                                PROJECTS_BASE_DIR, get_output_dir)
+                                get_output_dir)
 from coordinator_agent import CoordinatorAgent
 from agents            import load_agents
 from brain             import list_output_files
-from session_manager   import session_manager, Session
+from session_manager   import session_manager
 from reach_engine      import reach_engine
 from codebase_graph    import codebase_graph
 from command_registry  import CommandRegistry
@@ -991,7 +988,7 @@ class CommandHub:
             print(f"      ↳ {s['folder_name']}")
         print()
 
-        choice = input(c(f"  Silmek istediğiniz numara [Örn: 1, 1-5 (sohbet), 1 -f (dosyaları da sil) / 0=iptal]: ", Fore.YELLOW)).strip()
+        choice = input(c("  Silmek istediğiniz numara [Örn: 1, 1-5 (sohbet), 1 -f (dosyaları da sil) / 0=iptal]: ", Fore.YELLOW)).strip()
         indices, delete_files = self._parse_selection_indices(choice, len(sessions))
         if indices:
             deleted_names = []
@@ -1051,7 +1048,7 @@ class CommandHub:
             if active_key:
                 masked = active_key[:8] + "..." + active_key[-4:] if len(active_key) > 12 else "***"
                 print(c(f"  ✓ Kayıtlı API anahtarı: {masked}", Fore.GREEN))
-                change = input(c(f"  Anahtarı değiştirmek ister misiniz? [e/H]: ", Fore.YELLOW)).strip().lower()
+                change = input(c("  Anahtarı değiştirmek ister misiniz? [e/H]: ", Fore.YELLOW)).strip().lower()
                 if change in ("e", "evet", "y", "yes"):
                     active_key = ""
 
@@ -1070,7 +1067,7 @@ class CommandHub:
                         except Exception:
                             pass
                 else:
-                    ui.error(f"API key girilmedi. Sağlayıcı değiştirilemedi.")
+                    ui.error("API key girilmedi. Sağlayıcı değiştirilemedi.")
                     return
 
         # Sağlayıcıyı aktif et
@@ -2069,7 +2066,6 @@ class ChatSession:
     def _continue_pipeline(self) -> None:
         """Checkpoint.json'dan kaldığı yerden devam et."""
         from main import load_checkpoint, run_pipeline
-        from config import get_output_dir
 
         ui = ChatUI
         c  = ui._c

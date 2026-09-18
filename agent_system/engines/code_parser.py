@@ -13,7 +13,6 @@ v2 — Whitelist tabanlı uzantı doğrulama:
 """
 
 from __future__ import annotations
-import os
 import re
 import logging
 from pathlib import Path

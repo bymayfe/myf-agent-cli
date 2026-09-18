@@ -6,7 +6,6 @@ tek bir noktada toplar. Tab tamamlama (WordCompleter) ve /help metnini otomatik 
 """
 
 from __future__ import annotations
-from typing import Callable, Any, Optional
 from dataclasses import dataclass, field
 
 

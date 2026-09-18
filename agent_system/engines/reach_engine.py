@@ -38,7 +38,7 @@ import urllib.parse
 import urllib.request
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from permission_manager import permission_manager
 
@@ -852,7 +852,7 @@ class ReachEngine:
             topics = ch.get_hot_topics(limit=max_results)
             if not topics:
                 return None
-            lines = [f"## 🔥 V2EX Hot Topics\n"]
+            lines = ["## 🔥 V2EX Hot Topics\n"]
             for t in topics[:max_results]:
                 lines.append(
                     f"### [{t.get('title', '')}]({t.get('url', '')})\n"

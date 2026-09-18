@@ -125,7 +125,7 @@ class PermissionManager:
         print()
 
         try:
-            choice = input(f"  Izin Seciminiz [1-7, Enter=1]: ").strip()
+            choice = input("  Izin Seciminiz [1-7, Enter=1]: ").strip()
         except (KeyboardInterrupt, EOFError):
             choice = "7"
 
@@ -188,11 +188,7 @@ class PermissionManager:
     def load_project_policy(self) -> None:
         """Aktif projenin .agent_permissions.json dosyasından izinleri yükle."""
         try:
-            # Geriye dönük uyumluluk
             p = Path(get_output_dir()) / ".myfcli" / ".agent_permissions.json"
-            if not p.exists():
-                p = Path(get_output_dir()) / ".myfcli" / ".agent_permissions.json"
-                
             if p.exists():
                 raw = json.loads(p.read_text(encoding="utf-8"))
                 if "permission_mode" in raw:

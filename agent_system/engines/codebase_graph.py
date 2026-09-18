@@ -17,7 +17,7 @@ import logging
 import threading
 import subprocess
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
@@ -328,7 +328,7 @@ class CodebaseGraphEngine:
                 if arch and len(arch.strip()) > 20 and "error" not in arch.lower():
                     result = f"[Codebase Memory Graph — High Performance]\n{arch}"
                     self._repomap_cache[p_dir] = result
-                    print(f"  ✓  [Codebase] Codebase Memory MCP grafiği başarıyla yüklendi.")
+                    print("  ✓  [Codebase] Codebase Memory MCP grafiği başarıyla yüklendi.")
                     return result
             except Exception:
                 pass

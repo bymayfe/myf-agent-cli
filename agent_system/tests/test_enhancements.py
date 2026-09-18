@@ -10,15 +10,12 @@ for _sub in [_ROOT, _ROOT / "core", _ROOT / "engines", _ROOT / "agents", _ROOT /
     if _sub.is_dir() and str(_sub) not in sys.path:
         sys.path.insert(0, str(_sub))
 
-import os
-import pytest
 from diff_engine import (
     has_diff_blocks,
     extract_diff_blocks,
-    apply_search_replace_block,
     apply_surgical_edit,
 )
-from reach_engine import ReachEngine, BLOCKED_EXTENSIONS
+from reach_engine import ReachEngine
 from codebase_graph import CodebaseGraphEngine
 
 
@@ -1386,7 +1383,6 @@ def test_coordinator_agent_triggers_auto_summarize_integration(monkeypatch):
 def test_context_budgeter_proactive_should_summarize_with_avg_turn(monkeypatch, tmp_path):
     """Mevcut token yükü eşiğin altındayken bile avg_tokens_per_turn tahminiyle eşiği aşınca True döndüğünü doğrula."""
     from context_budgeter import ContextBudgeter
-    from llm_client import estimate_tokens
 
     budgeter = ContextBudgeter(project_dir=tmp_path)
     model = "ollama/qwen3.8:27b"  # 4096 context. %75 eşik = 3072 token

@@ -8,7 +8,7 @@ sohbet hafızasını güvenle özetler/kısaltır.
 
 from __future__ import annotations
 import logging
-from typing import Optional, Any
+from typing import Optional
 from pathlib import Path
 
 from config import get_output_dir

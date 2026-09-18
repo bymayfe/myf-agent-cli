@@ -15,7 +15,6 @@ Kullanim:
 
 from __future__ import annotations
 import sys
-import json
 import uuid
 import argparse
 from pathlib import Path
@@ -137,7 +136,7 @@ def cmd_add(args):
     elif role_input in templates:
         role_type = role_input
     else:
-        warn(f"Bilinmeyen rol. 'custom' olarak devam ediliyor.")
+        warn("Bilinmeyen rol. 'custom' olarak devam ediliyor.")
         role_type = "custom"
 
     # 3. Custom prompt (sadece custom rol veya ozellestirilmek istenirse)
@@ -239,7 +238,7 @@ def cmd_edit(args):
     _edit_field("Aciklama", "description",     entry.get("description",""))
 
     # Prompt guncelleme
-    print(_c(f"\n  Mevcut system prompt (ilk 200 karakter):", Fore.WHITE))
+    print(_c("\n  Mevcut system prompt (ilk 200 karakter):", Fore.WHITE))
     tmpl_prompt = templates.get(entry.get("role_type","custom"), {}).get("system_prompt","")
     current_prompt = entry.get("custom_prompt") or tmpl_prompt
     print(f"  {current_prompt[:200]}...\n")
@@ -358,7 +357,7 @@ def _find_agent(config: dict, agent_id: str) -> Optional[dict]:
 def _get_arg(args, name: str) -> Optional[str]:
     val = getattr(args, name, None)
     if not val:
-        val = input(_c(f"  Agent ID girin: ", Fore.CYAN)).strip()
+        val = input(_c("  Agent ID girin: ", Fore.CYAN)).strip()
     if not val:
         err("ID gerekli."); return None
     return val

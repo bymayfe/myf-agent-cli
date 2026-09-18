@@ -14,7 +14,6 @@ import json
 import argparse
 import traceback
 from pathlib import Path
-from datetime import datetime
 
 # Windows UTF-8 stdout
 if sys.platform == "win32":
@@ -34,7 +33,6 @@ for _sub in [_SYS_ROOT / "core", _SYS_ROOT / "engines", _SYS_ROOT / "agents", _S
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-import agent_system
 
 
 def emit_event(event_name: str, data: any):

@@ -8,7 +8,7 @@ Sabit 5-agent sistemi yerine tamamen dinamik CRUD destekli yaklasim.
 from __future__ import annotations
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -257,7 +257,6 @@ def _task_hint(agent: AgentDefinition) -> str:
     return hints.get(agent.role_type, "Gorevini yerine getir.")
 
 
-from code_parser import UniversalCodeParser, extract_code_blocks
 
 
 def extract_changelog(text: str) -> str:

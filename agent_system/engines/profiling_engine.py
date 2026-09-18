@@ -9,7 +9,6 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
-from typing import Optional
 
 
 class StuckLoopDetector:

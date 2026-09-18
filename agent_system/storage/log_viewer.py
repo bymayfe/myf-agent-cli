@@ -9,7 +9,6 @@ Kullanım:
 """
 
 import sys
-import os
 from pathlib import Path
 if sys.platform == "win32":
     try:
@@ -32,7 +31,7 @@ for _sub in [_SYS_ROOT, _SYS_ROOT / "core", _SYS_ROOT / "engines", _SYS_ROOT / "
     if _sub.is_dir() and _s not in sys.path:
         sys.path.insert(0, _s)
 
-from log_store import log_store, _fmt_table
+from log_store import log_store
 from session_manager import session_manager
 
 

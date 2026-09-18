@@ -14,7 +14,6 @@ import os
 import sys
 import json
 import time
-import socket
 import logging
 import threading
 import webbrowser
@@ -32,15 +31,14 @@ for _sub in [_SYS_ROOT / "core", _SYS_ROOT / "engines", _SYS_ROOT / "agents", _S
         sys.path.insert(0, _p)
 
 from config import (
-    get_output_dir, set_output_dir, get_active_provider_name, get_provider_config,
-    LLM_PARAMS, AGENT_MODELS, list_providers, set_active_provider, reload_config
+    get_output_dir, set_output_dir, get_active_provider_name, LLM_PARAMS,
+    AGENT_MODELS, list_providers, set_active_provider, reload_config
 )
 from brain import list_output_files
 from settings import settings
 from session_manager import session_manager, Session
 from coordinator_agent import CoordinatorAgent
 from engines.quota_engine import quota_engine
-from permission_manager import permission_manager
 
 logger = logging.getLogger("web_agent")
 
@@ -923,7 +921,7 @@ class WebHarnessHandler(BaseHTTPRequestHandler):
                     self.end_headers()
                     self.wfile.write(json.dumps({"ok": True, "history": history_clean}).encode("utf-8"))
                     return
-            except Exception as e:
+            except Exception:
                 pass
             self.send_response(400)
             self.end_headers()
@@ -1051,9 +1049,9 @@ def start_web_server(port: int = 3005, open_browser: bool = True):
     url = f"http://localhost:{port}"
 
     print("\n" + "=" * 60)
-    print(f"  🚀 MYF AI Web Agent & Dashboard Başlatıldı!")
+    print("  🚀 MYF AI Web Agent & Dashboard Başlatıldı!")
     print(f"  🌐 URL: {url}")
-    print(f"  💻 Kapatmak için: Ctrl+C")
+    print("  💻 Kapatmak için: Ctrl+C")
     print("=" * 60 + "\n")
 
     if open_browser:

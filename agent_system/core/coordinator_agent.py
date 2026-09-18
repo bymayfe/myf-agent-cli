@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 import warnings
 import logging
-from typing import Optional, Callable
+from typing import Callable
 
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 warnings.filterwarnings("ignore", category=UserWarning, module="litellm")

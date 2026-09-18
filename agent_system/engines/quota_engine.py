@@ -16,7 +16,7 @@ import logging
 import threading
 import urllib.request
 import urllib.error
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 logger = logging.getLogger(__name__)
 

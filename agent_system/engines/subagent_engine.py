@@ -33,11 +33,9 @@ for _sub in [_SYSTEM_ROOT, _SYSTEM_ROOT / "core", _SYSTEM_ROOT / "engines", _SYS
     if _sub.is_dir() and str(_sub) not in sys.path:
         sys.path.insert(0, str(_sub))
 
-from code_parser import UniversalCodeParser, extract_code_blocks
+from code_parser import extract_code_blocks
 from diff_engine import apply_surgical_edit, has_diff_blocks
 from log_store import log_store
-from permission_manager import permission_manager
-from reach_engine import reach_engine
 from settings import settings
 from test_runner import CodeVerifier
 from fix_engine import fix_engine

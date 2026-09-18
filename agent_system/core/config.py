@@ -131,10 +131,16 @@ def list_all_projects() -> list[dict[str, Any]]:
     return results
 
 
-# Backward compatibility alias
-@property
-def OUTPUT_DIR() -> str:
-    return get_output_dir()
+# Backward compatibility alias.
+# NOTE: `@property` only works on class attributes, not module-level
+# functions — using it here silently returned a `property` object
+# instead of the path string for any caller doing `config.OUTPUT_DIR`.
+# `__getattr__` (PEP 562) is the correct way to expose a computed,
+# always-current value as a plain module attribute.
+def __getattr__(name: str):
+    if name == "OUTPUT_DIR":
+        return get_output_dir()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 # ─────────────────────────────────────────────

@@ -9,7 +9,7 @@ import time
 import math
 import logging
 import warnings
-from typing import Optional, Callable
+from typing import Optional
 
 from litellm import completion
 import litellm
