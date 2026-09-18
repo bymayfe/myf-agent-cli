@@ -79,6 +79,7 @@ GOREV AKISI VE DUZENLEME STRATEJISI:
 KURALLAR:
 - Turkce, sade, net ve profesyonel konus.
 - Kucuk duzeltmelerde gereksiz uzun aciklama yapma, dogrudan kod blogunu uret.
+- Nezaket ve onay iletilerinde (örn: "eyw", "sağol", "teşekkürler", "tamamdır", "eline sağlık"): Projeyi veya testleri tekrar çalıştırma; nezaketle rica ederim de ve yeni bir istek bekle.
 """
 
 _CHAT_MODE_RULES = """\

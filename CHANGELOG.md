@@ -4,6 +4,13 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.4.0] - 2026-09-18
+
+### 🤝 Nezaket / Teşekkür ("eyw", "sağol", "teşekkürler") Kuralı & Gereksiz Test Döngüsü Engeli
+- **Koordinatör Sistem Promptu Nezaket Kuralı (`coordinator_agent.py`):**
+  - Kullanıcı "eyw", "sağol", "teşekkürler", "tamamdır", "eline sağlık" gibi memnuniyet iletisi yazdığında ajanın projeyi veya testleri baştan tekrar çalıştırması engellendi.
+  - Nezaketle yanıt verme ve kullanıcıdan yeni bir istek bekleme talimatı kural olarak enjekte edildi.
+
 ## [1.3.0] - 2026-09-18
 
 ### 🧠 Çok Aşamalı Düşünme & Sıralı Akıl Yürütme Gösterimi ("Düşünce 1, 2, 3...")
