@@ -158,15 +158,53 @@
     },
     "llama_cpp": {
       "label": "Lokal - llama.cpp (llama-server)",
-      "description": "Saf C++ motoru, minimum RAM ve maksimum verimlilik. llama-server calisir olmali.",
+      "description": "Saf C++ motoru, minimum RAM ve maksimum verimlilik. llama-server calisir olmali. Modeller: llama_server/models/ klasöründe. 27B için 16384, diger modeller icin 32768 context kullanilir.",
       "api_base": "http://localhost:8080/v1",
       "api_key": "llama-cpp",
       "api_key_env": null,
       "model_prefix": "openai",
       "requires_key": false,
-      "default_context_window": 8192,
+      "default_context_window": 32768,
+      "available_models": {
+        "Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M": {
+          "size": "5.1 GB",
+          "context_window": 32768,
+          "description": "Kodlama (Sansürsüz, Yüksek Kalite)"
+        },
+        "Qwen2.5-Coder-14B-Instruct-abliterated-IQ3_M": {
+          "size": "6.5 GB",
+          "context_window": 32768,
+          "description": "Kodlama Büyük (Sansürsüz)"
+        },
+        "Huihui-Qwen3.8-27B-abliterated-UD-DW-Q4_K_M": {
+          "size": "15.4 GB",
+          "context_window": 16384,
+          "description": "En Güçlü (Sansürsüz, ~16 GB VRAM)"
+        },
+        "DeepSeek-R1-Distill-Llama-8B-Q4_K_M": {
+          "size": "4.6 GB",
+          "context_window": 32768,
+          "description": "Akıl Yürütme (DeepSeek R1)"
+        },
+        "Ornith-1.5-9B-Q4_K_M": {
+          "size": "5.4 GB",
+          "context_window": 32768,
+          "description": "Genel Amaçlı"
+        },
+        "Qwen2.5-Coder-7B-Instruct-Q4_K_M": {
+          "size": "4.4 GB",
+          "context_window": 32768,
+          "description": "Kodlama (Standart)"
+        }
+      },
       "model_context_windows": {
-        "default": 8192
+        "default": 32768,
+        "Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M": 32768,
+        "Qwen2.5-Coder-14B-Instruct-abliterated-IQ3_M": 32768,
+        "Huihui-Qwen3.8-27B-abliterated-UD-DW-Q4_K_M": 16384,
+        "DeepSeek-R1-Distill-Llama-8B-Q4_K_M": 32768,
+        "Ornith-1.5-9B-Q4_K_M": 32768,
+        "Qwen2.5-Coder-7B-Instruct-Q4_K_M": 32768
       },
       "agent_models": {
         "coordinator": "openai/default",

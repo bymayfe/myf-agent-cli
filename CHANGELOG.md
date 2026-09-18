@@ -4,6 +4,28 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.5.0] - 2026-09-18
+
+### 🤖 Yeni Yerel GGUF Modelleri & llama.cpp Dinamik Model Entegrasyonu
+
+#### Yeni Modeller (`llama_server/models/`)
+- **Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M** (5.1 GB) — Yüksek kaliteli Q5_K_M sansürsüz kodlama modeli
+- **Qwen2.5-Coder-14B-Instruct-abliterated-IQ3_M** (6.5 GB) — Büyük 14B sansürsüz kodlama modeli
+- **Huihui-Qwen3.8-27B-abliterated-UD-DW-Q4_K_M** (15.4 GB) — En güçlü lokal model, 27B sansürsüz
+
+#### Web UI — `llama.cpp` Provider Dinamik Model Listesi
+- `get_available_models("llama_cpp")` artık `providers_config.json`'daki `available_models` bölümünü okuyarak model adı, boyut ve açıklamayla birlikte dropdown'a sunar
+- Config boşsa `llama_server/models/` klasörünü fiziksel olarak tarayarak GGUF dosyalarını listeler (fallback)
+
+#### CLI — `llama_cpp` Provider Model Listesi
+- `/provider` komutuyla `llama.cpp` seçildiğinde artık 6 model listelenir
+- `list_provider_models()` fonksiyonundan `"default"` gibi meta key'ler filtrelendi
+
+#### `providers_config.json` — `llama_cpp` Güncellendi
+- `default_context_window`: `8192` → `32768`
+- `available_models` bölümü eklendi: her model için `size`, `context_window`, `description` alanları
+- `model_context_windows` tüm 6 modelle güncellendi; 27B için `16384` (VRAM koruması)
+
 ## [1.4.0] - 2026-09-18
 
 ### 🤝 Nezaket / Teşekkür ("eyw", "sağol", "teşekkürler") Kuralı & Gereksiz Test Döngüsü Engeli

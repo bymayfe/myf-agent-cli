@@ -109,10 +109,65 @@ def get_available_models(provider_name: str) -> list[dict]:
             {"id": "moonshot/moonshot-v1-128k", "name": "moonshot-v1-128k", "label": "Kimi K2 (128K Context)"}
         ]
 
-    elif provider_name in ("lm_studio", "llama_cpp"):
+    elif provider_name == "lm_studio":
         return [
-            {"id": "openai/local-model", "name": "local-model", "label": "Lokal Aktif Model (Port 8080/1234)"}
+            {"id": "openai/local-model", "name": "local-model", "label": "Lokal Aktif Model (Port 1234)"}
         ]
+
+    elif provider_name == "llama_cpp":
+        models = []
+        # providers_config.json'daki available_models veya model_context_windows'tan oku
+        try:
+            from config import load_providers as _lp
+            p_data = _lp().get("providers", {}).get("llama_cpp", {})
+            avail = p_data.get("available_models", {})
+            ctx_wins = p_data.get("model_context_windows", {})
+            if avail:
+                for m_name, m_info in avail.items():
+                    ctx = m_info.get("context_window", p_data.get("default_context_window", 32768))
+                    size = m_info.get("size", "")
+                    desc = m_info.get("description", "")
+                    label_parts = [m_name]
+                    if size:
+                        label_parts.append(f"({size})")
+                    if desc:
+                        label_parts.append(f"— {desc}")
+                    models.append({
+                        "id": f"openai/{m_name}",
+                        "name": m_name,
+                        "label": " ".join(label_parts),
+                        "context_window": ctx,
+                    })
+            elif ctx_wins:
+                for m_name, ctx in ctx_wins.items():
+                    if m_name == "default":
+                        continue
+                    models.append({
+                        "id": f"openai/{m_name}",
+                        "name": m_name,
+                        "label": f"{m_name} ({ctx // 1024}K ctx)",
+                        "context_window": ctx,
+                    })
+        except Exception:
+            pass
+
+        # models/ klasörünü de tara (config'de olmayan GGUF'lar için)
+        if not models:
+            llama_models_dir = Path(__file__).parent.parent / "llama_server" / "models"
+            if llama_models_dir.exists():
+                for gguf in sorted(llama_models_dir.glob("*.gguf")):
+                    m_name = gguf.stem
+                    size_gb = round(gguf.stat().st_size / (1024 ** 3), 1)
+                    models.append({
+                        "id": f"openai/{m_name}",
+                        "name": m_name,
+                        "label": f"{m_name} ({size_gb} GB)",
+                    })
+
+        if not models:
+            models = [{"id": "openai/default", "name": "default", "label": "Lokal Aktif Model (Port 8080)"}]
+
+        return models
 
     return []
 

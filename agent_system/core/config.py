@@ -215,7 +215,9 @@ def list_provider_models(provider_name: str = None) -> list[str]:
     data = load_providers()
     name = provider_name or get_active_provider_name()
     p_data = data.get("providers", {}).get(name, {})
-    return list(p_data.get("model_context_windows", {}).keys())
+    # "default" gibi meta key'leri filtrele
+    _SKIP = {"default"}
+    return [k for k in p_data.get("model_context_windows", {}).keys() if k not in _SKIP]
 
 
 def add_provider_model(provider_name: str, model_name: str, context_window: int = 131072) -> str:
