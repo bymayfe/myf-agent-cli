@@ -203,11 +203,13 @@ class ChatUI:
             print(f"    {c('✗', Fore.RED, Style.BRIGHT)} Hata: {details.get('error')}")
 
     _stream_state = "none"
+    _think_count = 0
 
     @classmethod
     def stream_begin(cls, name: str) -> None:
         """Streaming cevap basliyor — etiket yaz."""
         cls._stream_state = "none"
+        cls._think_count = 0
         label = cls._c(f"  ┌─ {name}", Fore.CYAN, Style.BRIGHT)
         hint = cls._c("  Ctrl+C: durdur", Fore.YELLOW)
         print(f"\n{label}{hint}\n  │ ", end="", flush=True)
@@ -218,14 +220,15 @@ class ChatUI:
         if token_type == "thinking":
             if cls._stream_state != "thinking":
                 cls._stream_state = "thinking"
-                header = cls._c("\n  ┌── 💭 [DUSUNME / REASONING] ──────────────────────────\n  ", Fore.MAGENTA, Style.BRIGHT)
+                cls._think_count += 1
+                header = cls._c(f"\n  ┌── 💭 [DÜŞÜNCE {cls._think_count} / REASONING] ──────────────────────────\n  ", Fore.MAGENTA, Style.BRIGHT)
                 print(header, end="", flush=True)
             # Düşünme tokenları: Parlak ve çok rahat okunan sıcak sarı/amber tonu
             print(cls._c(token, Fore.YELLOW), end="", flush=True)
         else:
             if cls._stream_state != "content":
                 if cls._stream_state == "thinking":
-                    header = cls._c("\n  └── 🎯 [YANIT / MODEL CIKTISI] ────────────────────────\n  ", Fore.GREEN, Style.BRIGHT)
+                    header = cls._c(f"\n  └── 🎯 [YANIT {cls._think_count} / MODEL ÇIKTISI] ────────────────────────\n  ", Fore.GREEN, Style.BRIGHT)
                     print(header, end="", flush=True)
                 cls._stream_state = "content"
             # Model yanıt tokenları: Kristal netliğinde parlak beyaz
@@ -235,6 +238,7 @@ class ChatUI:
     def stream_end(cls) -> None:
         """Streaming bitti, yeni satira gec."""
         cls._stream_state = "none"
+        cls._think_count = 0
         print(cls._c("\n  └─", Fore.CYAN))
 
     @classmethod

@@ -4,6 +4,14 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.3.0] - 2026-09-18
+
+### 🧠 Çok Aşamalı Düşünme & Sıralı Akıl Yürütme Gösterimi ("Düşünce 1, 2, 3...")
+- **Adımlı Terminal Düşünme Başlıkları (`chat.py`):**
+  - CLI streaming akışında çok adımlı eylemler yürütülürken her akıl yürütme turu artık numaralandırılarak gösterilir (`┌── 💭 [DÜŞÜNCE 1 / REASONING]`, `└── 🎯 [YANIT 1 / MODEL ÇIKTISI]`, `┌── 💭 [DÜŞÜNCE 2 / REASONING]`...).
+  - Düşünme adımları bittiğinde ve araçlar çalıştırılıp model sonraki tura geçtiğinde sayaç otomatik artarak adımlar arasındaki kronolojik ayrımı netleştirir.
+  - Akıl yürütme yapmayan modellerde (GPT-4o vb.) düşünce başlıkları basılmadan temiz çıktı akışı sağlanır.
+
 ## [1.2.0] - 2026-09-17
 
 ### 📦 NPM & PyPI Resmi Registry Normalizasyonu ve Squat Filtresi
