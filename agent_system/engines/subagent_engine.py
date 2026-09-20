@@ -37,7 +37,7 @@ from code_parser import extract_code_blocks
 from diff_engine import apply_surgical_edit, has_diff_blocks
 from log_store import log_store
 from settings import settings
-from test_runner import CodeVerifier
+from test_runner import CodeVerifier, run_code_verification_tests
 from fix_engine import fix_engine
 
 logger = logging.getLogger("subagent_engine")
@@ -452,7 +452,7 @@ class SubagentOrchestrator:
         """
         fix_attempts = 0
         newly_written: list[str] = []
-        verify_result = CodeVerifier.run_tests(project_dir)
+        verify_result = run_code_verification_tests(project_dir)
 
         while verify_result.get("error") and fix_attempts < max_attempts:
             fix_attempts += 1
@@ -488,7 +488,7 @@ class SubagentOrchestrator:
 
             if fixed:
                 log_store.resolve_error(err_id, resolver="fix_engine")
-                verify_result = CodeVerifier.run_tests(project_dir)
+                verify_result = run_code_verification_tests(project_dir)
             else:
                 break
 

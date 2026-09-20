@@ -4,6 +4,22 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.10.0] - 2026-09-21
+
+### 🎯 Proje Türüne Göre Akıllı Test Başlatıcı (Language-Aware Test Runner), Pytest Hata Önleme ve Mimari Yol Normalizasyonu
+- **Çok Dilli Test Dağıtıcısı & Önceliği (`test_runner.py`):**
+  - Proje kökünde `package.json`, `tsconfig.json` veya `src/**/*.{ts,tsx,js,jsx}`, `App.tsx` olduğunda Node/TypeScript motoru (`run_node_ts_tests`) kesin öncelikle çalıştırılır.
+  - Proje içi gizli ve geçici dizinler (`.myfcli/temp_codes`, `.venv`, `node_modules` vb.) filtrelenerek sahte Python dosyası tespiti ve TypeScript/React projelerinde `pytest`'in yanlışlıkla devreye girmesi engellendi.
+  - **Pytest Çıkış Kodu 5 (`NO_TESTS_COLLECTED`) Düzeltildi:** Pytest test dosyası bulamadığında standart olarak 5 döndürür; bu durum artık hata sayılmıyor (`error = None`), sahte Micro-Fix / Onarım döngüleri sonlandırıldı.
+- **Onarım ve Subagent Motorlarında Çok Dilli Doğrulama:**
+  - `fix_engine.py` (Micro-Fix ve Deep Refactor) ve `subagent_engine.py` (`_verify_and_repair_output`) içindeki hardcoded `run_tests` çağrıları çok dilli `run_code_verification_tests` ile güncellendi.
+- **QA / Test Mühendisi Sistem Promptu Düzeltmesi (`role_templates.json`):**
+  - Prompttaki hardcoded Python test kodu yazma zorlaması kaldırıldı (`# FILE: .myfcli/temp_codes/test_xxx.py`).
+  - QA ajanına projenin birincil diline (TypeScript/JavaScript için Jest/Vitest, Python için Pytest, Rust için Cargo test, Go için Go test) uygun yerel test senaryoları üretmesi sağlandı.
+- **Mimarideki Hayali Kök Dizin Öneki Normalizasyonu (`main.py`):**
+  - Mimarın proje adını kök klasör olarak planladığı durumlarda (`zikir-uygulamasi/src/...`), diskteki gerçek göreli yollarla (`src/...`) eşleşmesini sağlayan `pf_sub` normalizasyonu eklendi.
+  - Bu sayede dosyaları diskte var olduğu halde eksik sanıp DEV ajanının 4 tur fazladan çalışması engellendi.
+
 ## [1.9.0] - 2026-09-20
 
 ### ⚡ Canlı Streaming (stream=True), Yerel Model Tespiti ve llama.cpp Ayarları

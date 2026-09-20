@@ -547,21 +547,24 @@ def run_pipeline(
                 arch_text = context.get("architecture", "")
                 planned_files = extract_planned_files_from_architecture(arch_text)
                 current_on_disk = list_output_files()
+                cf_clean_list = [cf.replace("\\", "/").lstrip("./") for cf in current_on_disk]
                 missing_files = []
                 for pf in planned_files:
                     pf_clean = pf.replace("\\", "/").lstrip("./")
                     has_dir = "/" in pf_clean
                     if has_dir:
+                        pf_sub = pf_clean.split("/", 1)[1] if pf_clean.count("/") >= 1 else ""
                         exists = any(
-                            cf.replace("\\", "/").lstrip("./") == pf_clean or
-                            cf.replace("\\", "/").lstrip("./").endswith("/" + pf_clean)
-                            for cf in current_on_disk
+                            cf == pf_clean or
+                            cf.endswith("/" + pf_clean) or
+                            (bool(pf_sub) and (cf == pf_sub or cf.endswith("/" + pf_sub)))
+                            for cf in cf_clean_list
                         )
                     else:
                         exists = any(
-                            cf.replace("\\", "/").lstrip("./") == pf_clean or
-                            cf.replace("\\", "/").split("/")[-1] == pf_clean
-                            for cf in current_on_disk
+                            cf == pf_clean or
+                            cf.split("/")[-1] == pf_clean
+                            for cf in cf_clean_list
                         )
                     if not exists:
                         missing_files.append(pf_clean)

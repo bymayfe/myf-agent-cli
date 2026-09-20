@@ -24,7 +24,7 @@ from brain import write_output_file
 from codebase_graph import build_repomap
 from code_parser import extract_code_blocks
 from log_store import log_store
-from test_runner import CodeVerifier
+from test_runner import CodeVerifier, run_code_verification_tests
 from git_guard import GitGuard
 
 logger = logging.getLogger("fix_engine")
@@ -151,7 +151,7 @@ class MicroFixEngine:
                 )
 
                 if written:
-                    test = CodeVerifier.run_tests(output_dir)
+                    test = run_code_verification_tests(output_dir)
                     if not test.get("error"):
                         logger.info("[MICRO-FIX #%d] Hata cozuldu: %s", attempt, file_path)
                         err_id = log_store.log_error(
@@ -440,7 +440,7 @@ class Fix:
             step_id=step_id,
         )
         if written:
-            test = CodeVerifier.run_tests(output_dir)
+            test = run_code_verification_tests(output_dir)
             if not test.get("error"):
                 # Başarılı derin onarım: stage cezasını ve hata sayacını sıfırla
                 self.reset_on_success(target_file=target_file, error_signature=sig)

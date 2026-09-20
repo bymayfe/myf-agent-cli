@@ -1796,3 +1796,89 @@ def test_quota_engine_bottom_toolbar_text():
     text_nv = engine.get_bottom_toolbar_text("nvidia", "deepseek-v4-pro", "sess-456", "/tmp/demo")
     assert "NVIDIA" in text_nv
     assert "demo" in text_nv
+
+
+def test_run_code_verification_node_ts_selected_for_react_native():
+    """package.json ve App.tsx olan bir projede run_code_verification_tests doğrudan Node motorunu seçmeli."""
+    import tempfile
+    from pathlib import Path as _P
+    from unittest.mock import patch
+    from test_runner import run_code_verification_tests
+
+    with tempfile.TemporaryDirectory() as td:
+        _P(td, "package.json").write_text('{"name": "test-app", "dependencies": {}}')
+        _P(td, "App.tsx").write_text('import React from "react"; export default function App() { return null; }')
+        # İç .myfcli klasöründe test_foo.py olsa bile bu Node projesi sayılmalı
+        temp_dir = _P(td, ".myfcli", "temp_codes")
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        (temp_dir / "test_dummy.py").write_text("def test_x(): pass")
+
+        with patch("permission_manager.permission_manager.check_permission", return_value=False):
+            result = run_code_verification_tests(td)
+            assert result["language"] == "node"
+            assert result["verified"] is True
+            assert result["syntax_ok"] is True
+
+
+def test_pytest_exit_code_5_not_treated_as_error():
+    """Pytest exit code 5 (0 items collected) aldığında sahte çökme veya hata üretmemeli."""
+    import subprocess
+    from unittest.mock import patch, MagicMock
+    from test_runner import CodeVerifier
+
+    def fake_subprocess_run(cmd, *args, **kwargs):
+        mock_res = MagicMock()
+        # py_compile başarılı geçsin
+        if "py_compile" in cmd:
+            mock_res.returncode = 0
+            mock_res.stdout = ""
+            mock_res.stderr = ""
+        else:
+            # pytest exit code 5: NO_TESTS_COLLECTED
+            mock_res.returncode = 5
+            mock_res.stdout = "collected 0 items\nno tests ran in 0.05s"
+            mock_res.stderr = ""
+        return mock_res
+
+    import tempfile
+    from pathlib import Path as _P
+    with tempfile.TemporaryDirectory() as td:
+        _P(td, "test_empty.py").write_text("def test_dummy(): pass\n")
+        with patch("subprocess.run", side_effect=fake_subprocess_run), \
+             patch("permission_manager.permission_manager.check_permission", return_value=True):
+            res = CodeVerifier.run_tests(td)
+            assert res["error"] is None
+            assert res["executed"] is True
+            assert "0 test toplandi" in res["output"]
+
+
+def test_architect_planned_files_prefix_normalized():
+    """Mimarın çizdiği kök proje klasörü öneki diskteki göreli yollarla eşleşebilmeli."""
+    current_on_disk = ["src/screens/HomeScreen.tsx", "src/navigation/AppNavigator.tsx", "package.json"]
+    planned_files = ["zikir-uygulamasi/src/screens/HomeScreen.tsx", "zikir-uygulamasi/package.json"]
+
+    cf_clean_list = [cf.replace("\\", "/").lstrip("./") for cf in current_on_disk]
+    missing_files = []
+    for pf in planned_files:
+        pf_clean = pf.replace("\\", "/").lstrip("./")
+        has_dir = "/" in pf_clean
+        if has_dir:
+            pf_sub = pf_clean.split("/", 1)[1] if pf_clean.count("/") >= 1 else ""
+            exists = any(
+                cf == pf_clean or
+                cf.endswith("/" + pf_clean) or
+                (bool(pf_sub) and (cf == pf_sub or cf.endswith("/" + pf_sub)))
+                for cf in cf_clean_list
+            )
+        else:
+            exists = any(
+                cf == pf_clean or
+                cf.split("/")[-1] == pf_clean
+                for cf in cf_clean_list
+            )
+        if not exists:
+            missing_files.append(pf_clean)
+
+    # Her iki dosya da diskte var olduğu için missing_files boş olmalı
+    assert missing_files == []
+

@@ -179,55 +179,61 @@ class CodeVerifier:
                 results["output"] = res.stdout[:800]
                 if res.returncode != 0:
                     error_out = res.stderr.strip() if res.stderr.strip() else res.stdout.strip()
-                    if "ImportError" in error_out or "ModuleNotFoundError" in error_out:
-                        etype = "import"
-                    elif "SyntaxError" in error_out or "IndentationError" in error_out:
-                        etype = "syntax"
-                    elif "AssertionError" in error_out or "FAILED" in error_out:
-                        etype = "assertion"
-                    elif "TypeError" in error_out or "AttributeError" in error_out or "NameError" in error_out:
-                        etype = "runtime"
-                    elif is_test:
-                        etype = "pytest"
+                    # Pytest çıkış kodu 5: ExitCode.NO_TESTS_COLLECTED (0 test toplandı / test fonksiyonu yok)
+                    # Bu durum bir kod çökmesi veya sentaks hatası değildir.
+                    if is_test and (res.returncode == 5 or "collected 0 items" in error_out or "no tests ran" in error_out):
+                        results["executed"] = True
+                        results["output"] = "Pytest: 0 test toplandi (tanimli test bulunamadi)."
                     else:
-                        etype = "runtime"
+                        if "ImportError" in error_out or "ModuleNotFoundError" in error_out:
+                            etype = "import"
+                        elif "SyntaxError" in error_out or "IndentationError" in error_out:
+                            etype = "syntax"
+                        elif "AssertionError" in error_out or "FAILED" in error_out:
+                            etype = "assertion"
+                        elif "TypeError" in error_out or "AttributeError" in error_out or "NameError" in error_out:
+                            etype = "runtime"
+                        elif is_test:
+                            etype = "pytest"
+                        else:
+                            etype = "runtime"
 
-                    # Hatanın meydana geldiği asıl dosyayı yakala:
-                    # 1. Python traceback'indeki EN SON File "...", line X satırı (hatayı asıl üreten dosya)
-                    # 2. Pytest çıktısındaki 'ERROR path/to/test.py' veya 'FAILED path/to/test.py'
-                    failing_file = str(target_entry.relative_to(out_path)).replace("\\", "/")
+                        # Hatanın meydana geldiği asıl dosyayı yakala:
+                        # 1. Python traceback'indeki EN SON File "...", line X satırı (hatayı asıl üreten dosya)
+                        # 2. Pytest çıktısındaki 'ERROR path/to/test.py' veya 'FAILED path/to/test.py'
+                        failing_file = str(target_entry.relative_to(out_path)).replace("\\", "/")
 
-                    tb_matches = re.findall(r'File\s+"([^"]+\.py)"', error_out)
-                    found_inner = False
-                    if tb_matches:
-                        for cand_path in reversed(tb_matches):
-                            p = Path(cand_path)
-                            try:
-                                if p.is_relative_to(out_path):
-                                    failing_file = str(p.relative_to(out_path)).replace("\\", "/")
-                                    found_inner = True
-                                    break
-                            except Exception:
-                                if str(p).startswith(str(out_path)):
-                                    failing_file = str(p)[len(str(out_path)):].lstrip("/\\").replace("\\", "/")
-                                    found_inner = True
-                                    break
+                        tb_matches = re.findall(r'File\s+"([^"]+\.py)"', error_out)
+                        found_inner = False
+                        if tb_matches:
+                            for cand_path in reversed(tb_matches):
+                                p = Path(cand_path)
+                                try:
+                                    if p.is_relative_to(out_path):
+                                        failing_file = str(p.relative_to(out_path)).replace("\\", "/")
+                                        found_inner = True
+                                        break
+                                except Exception:
+                                    if str(p).startswith(str(out_path)):
+                                        failing_file = str(p)[len(str(out_path)):].lstrip("/\\").replace("\\", "/")
+                                        found_inner = True
+                                        break
 
-                    if not found_inner:
-                        file_match = re.search(r"(?:ERROR|FAILED)\s+([a-zA-Z0-9_\-\./\\]+\.py)", error_out)
-                        if file_match:
-                            cand_f = file_match.group(1).replace("\\", "/")
-                            if (out_path / cand_f).exists():
-                                failing_file = cand_f
+                        if not found_inner:
+                            file_match = re.search(r"(?:ERROR|FAILED)\s+([a-zA-Z0-9_\-\./\\]+\.py)", error_out)
+                            if file_match:
+                                cand_f = file_match.group(1).replace("\\", "/")
+                                if (out_path / cand_f).exists():
+                                    failing_file = cand_f
 
-                    results["error"] = (
-                        f"Calistirma Hatasi ({failing_file}):\n"
-                        f"[Komut]: {cmd_str}\n"
-                        f"[Dizin]: {out_path}\n"
-                        f"[Terminal]:\n{error_out[:1500]}"
-                    )
-                    results["error_type"] = etype
-                    results["file"] = failing_file
+                        results["error"] = (
+                            f"Calistirma Hatasi ({failing_file}):\n"
+                            f"[Komut]: {cmd_str}\n"
+                            f"[Dizin]: {out_path}\n"
+                            f"[Terminal]:\n{error_out[:1500]}"
+                        )
+                        results["error_type"] = etype
+                        results["file"] = failing_file
                 else:
                     # Pytest geçti veya test yok. Şimdi tüm modülleri ve ana giriş noktalarını doğrula:
                     for py_f in py_files:
@@ -534,21 +540,48 @@ def run_code_verification_tests(output_dir: str) -> dict:
     """
     out_path = Path(output_dir)
 
-    has_py = bool(list(out_path.rglob("*.py")))
-    if has_py:
+    # 1. Gerçek proje kaynak .py dosyalarını ara (.myfcli, .venv, node_modules, .git, temp klasörleri hariç)
+    genuine_py_files = [
+        f for f in out_path.rglob("*.py")
+        if not any(part.startswith(".") or part in ("node_modules", "venv", ".venv", "dist", "build", "temp_codes") for part in f.parts)
+    ]
+
+    # 2. Node.js / TypeScript / React / React Native / Expo / Next.js Projesi:
+    # package.json varsa ve proje TS/JS ise öncelikli olarak Node/TS motorunu çalıştır
+    has_package_json = (out_path / "package.json").exists()
+    has_tsconfig = (out_path / "tsconfig.json").exists()
+    has_ts_js_src = (
+        any(out_path.glob("src/**/*.tsx"))
+        or any(out_path.glob("src/**/*.ts"))
+        or any(out_path.glob("src/**/*.jsx"))
+        or any(out_path.glob("src/**/*.js"))
+        or (out_path / "App.tsx").exists()
+        or (out_path / "app.json").exists()
+    )
+
+    if has_package_json:
+        # Eğer tsconfig, ts/js kaynak dosyaları varsa VEYA hiç gerçek Python dosyası yoksa:
+        if has_tsconfig or has_ts_js_src or not genuine_py_files:
+            return CodeVerifier.run_node_ts_tests(output_dir)
+
+    # 3. Rust Projesi
+    if (out_path / "Cargo.toml").exists():
+        return CodeVerifier.run_rust_tests(output_dir)
+
+    # 4. Go Projesi
+    if (out_path / "go.mod").exists():
+        return CodeVerifier.run_go_tests(output_dir)
+
+    # 5. Python Projesi (gerçek .py kaynak dosyaları varsa)
+    if genuine_py_files:
         results = CodeVerifier.run_tests(output_dir)
         results.setdefault("verified", True)
         results.setdefault("language", "python")
         return results
 
-    if (out_path / "package.json").exists():
+    # 6. Fallback: package.json varsa
+    if has_package_json:
         return CodeVerifier.run_node_ts_tests(output_dir)
-
-    if (out_path / "Cargo.toml").exists():
-        return CodeVerifier.run_rust_tests(output_dir)
-
-    if (out_path / "go.mod").exists():
-        return CodeVerifier.run_go_tests(output_dir)
 
     return {
         "syntax_ok": True,
