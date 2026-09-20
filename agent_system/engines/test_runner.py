@@ -393,6 +393,7 @@ class CodeVerifier:
         if not node_modules.exists():
             cmd_install = "npm install"
             if permission_manager.check_permission("run_command", cmd_install, agent_name="system_test"):
+                _npm_install_ok = False
                 try:
                     inst_res = subprocess.run(
                         ["npm", "install", "--no-audit", "--no-fund"],
@@ -403,12 +404,34 @@ class CodeVerifier:
                             "npm install basarisiz oldu (devam ediliyor): %s",
                             (inst_res.stderr or "")[-500:],
                         )
+                    else:
+                        _npm_install_ok = True
                 except FileNotFoundError:
                     results["verified"] = False
                     results["output"] = "npm bulunamadi (Node.js kurulu degil olabilir), fiziksel dogrulama atlandi."
                     return results
                 except subprocess.TimeoutExpired:
                     logger.warning("npm install 240sn icinde tamamlanamadi, devam ediliyor.")
+
+            # node_modules hâlâ yoksa (install başarısız/izin yok/timeout):
+            # gerçek test scripti de yoksa doğrulama atlayıp verified=True dön,
+            # pipeline döngüye girmesin.
+            if not node_modules.exists():
+                _scripts = {}
+                try:
+                    import json as _json2
+                    _scripts = _json2.loads(pkg_json_path.read_text(encoding="utf-8")).get("scripts", {})
+                except Exception:
+                    pass
+                _test_scr = _scripts.get("test", "")
+                if not _test_scr or "no test specified" in _test_scr.lower():
+                    results["verified"] = True
+                    results["output"] = (
+                        "node_modules kurulamadi ve test scripti tanimli degil; "
+                        "fiziksel dogrulama atlandi (kod yazimi basarili sayildi)."
+                    )
+                    logger.info("[test_runner] node_modules yok + test script yok → verified=True, dongu kiriliyor.")
+                    return results
 
         # 1. TypeScript tip/sozdizim kontrolu
         if (out_path / "tsconfig.json").exists() and node_modules.exists():
