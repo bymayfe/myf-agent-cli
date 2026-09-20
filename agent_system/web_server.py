@@ -19,7 +19,7 @@ import threading
 import webbrowser
 import urllib.request
 from pathlib import Path
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 # Proje ana dizinini import yoluna ekle
@@ -827,6 +827,10 @@ class WebHarnessHandler(BaseHTTPRequestHandler):
     """DeepSeek Harness tarzı REST ve Streaming HTTP sunucu işleyicisi."""
 
     coordinator = None
+    # ThreadingHTTPServer altında paralel istekler aynı coordinator/history
+    # nesnesine yazabilir; /api/chat, /api/sessions/* ve /api/settings bu
+    # kilidi kullanarak birbirini bozmadan sırayla çalışır.
+    _coordinator_lock = threading.Lock()
 
     def log_message(self, format, *args):
         return
@@ -919,9 +923,17 @@ class WebHarnessHandler(BaseHTTPRequestHandler):
         elif path == "/api/file-content":
             params = parse_qs(parsed.query)
             target = params.get("path", [""])[0]
-            out_dir = Path(get_output_dir())
-            file_p = out_dir / target
-            if file_p.exists() and file_p.is_file():
+            out_dir = Path(get_output_dir()).resolve()
+            # GÜVENLİK: target bir mutlak yol veya "../" içerebilir ve pathlib
+            # bunu proje dizini dışına taşırabilir (path traversal / arbitrary
+            # file read). Birleştirilmiş yolu çözüp proje dizini altında
+            # kaldığını doğrulamadan asla dosya açma.
+            file_p = (out_dir / target).resolve()
+            if out_dir not in file_p.parents and file_p != out_dir:
+                self.send_response(403)
+                self.end_headers()
+                self.wfile.write(b"Erisim reddedildi: proje disina cikilamaz")
+            elif file_p.exists() and file_p.is_file():
                 try:
                     content = file_p.read_text(encoding="utf-8", errors="replace")
                     self.send_response(200)
@@ -965,11 +977,12 @@ class WebHarnessHandler(BaseHTTPRequestHandler):
                 p = Path(target_path)
                 s_obj = Session.load_from_dir(p)
                 if s_obj:
-                    session_manager.current_session = s_obj
-                    set_output_dir(str(s_obj.project_dir))
-                    if not WebHarnessHandler.coordinator:
-                        WebHarnessHandler.coordinator = CoordinatorAgent()
-                    WebHarnessHandler.coordinator.history = list(s_obj.conversation_history)
+                    with WebHarnessHandler._coordinator_lock:
+                        session_manager.current_session = s_obj
+                        set_output_dir(str(s_obj.project_dir))
+                        if not WebHarnessHandler.coordinator:
+                            WebHarnessHandler.coordinator = CoordinatorAgent()
+                        WebHarnessHandler.coordinator.history = list(s_obj.conversation_history)
                     history_clean = [{"role": m.get("role", "user"), "content": m.get("content", "")} for m in s_obj.conversation_history]
                     self.send_response(200)
                     self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -983,9 +996,10 @@ class WebHarnessHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/sessions/new":
             s = session_manager.create_new_session(title="Yeni Oturum", slug="yeni_proje")
-            if not WebHarnessHandler.coordinator:
-                WebHarnessHandler.coordinator = CoordinatorAgent()
-            WebHarnessHandler.coordinator.reset()
+            with WebHarnessHandler._coordinator_lock:
+                if not WebHarnessHandler.coordinator:
+                    WebHarnessHandler.coordinator = CoordinatorAgent()
+                WebHarnessHandler.coordinator.reset()
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.end_headers()
@@ -1035,7 +1049,8 @@ class WebHarnessHandler(BaseHTTPRequestHandler):
                 reload_config()
 
                 if WebHarnessHandler.coordinator:
-                    WebHarnessHandler.coordinator.refresh_settings()
+                    with WebHarnessHandler._coordinator_lock:
+                        WebHarnessHandler.coordinator.refresh_settings()
 
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -1044,8 +1059,9 @@ class WebHarnessHandler(BaseHTTPRequestHandler):
                 return
             except Exception as e:
                 self.send_response(500)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.end_headers()
-                self.wfile.write(f'{{"ok": false, "error": "{e}"}}'.encode("utf-8"))
+                self.wfile.write(json.dumps({"ok": False, "error": str(e)}).encode("utf-8"))
 
         elif path == "/api/chat":
             length = int(self.headers.get("Content-Length", 0))
@@ -1068,7 +1084,9 @@ class WebHarnessHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
             if not WebHarnessHandler.coordinator:
-                WebHarnessHandler.coordinator = CoordinatorAgent()
+                with WebHarnessHandler._coordinator_lock:
+                    if not WebHarnessHandler.coordinator:
+                        WebHarnessHandler.coordinator = CoordinatorAgent()
 
             def token_callback(token: str, token_type: str = "content"):
                 if token_type == "content" and token:
@@ -1081,10 +1099,11 @@ class WebHarnessHandler(BaseHTTPRequestHandler):
                         pass
 
             try:
-                full_resp, is_pipeline = WebHarnessHandler.coordinator.chat(
-                    user_prompt,
-                    on_token=token_callback
-                )
+                with WebHarnessHandler._coordinator_lock:
+                    full_resp, is_pipeline = WebHarnessHandler.coordinator.chat(
+                        user_prompt,
+                        on_token=token_callback
+                    )
             except Exception as exc:
                 err_data = f"\n[HATA: {exc}]".encode("utf-8")
                 self.wfile.write(f"{len(err_data):X}\r\n".encode("utf-8") + err_data + b"\r\n")
@@ -1100,7 +1119,10 @@ class WebHarnessHandler(BaseHTTPRequestHandler):
 def start_web_server(port: int = 3005, open_browser: bool = True):
     """Web Agent sunucusunu başlatır."""
     server_address = ("0.0.0.0", port)
-    httpd = HTTPServer(server_address, WebHarnessHandler)
+    # ThreadingHTTPServer: /api/chat uzun süren bir streaming isteğidir; eski
+    # tek-thread'li HTTPServer bu istek bitene kadar /api/status, /api/files
+    # gibi diğer tüm uçları da bloke ediyordu (arayüz "donmuş" görünüyordu).
+    httpd = ThreadingHTTPServer(server_address, WebHarnessHandler)
     url = f"http://localhost:{port}"
 
     print("\n" + "=" * 60)

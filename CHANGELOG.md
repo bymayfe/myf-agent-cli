@@ -4,6 +4,16 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.6.0] - 2026-09-20
+
+### 🛡️ Web Sunucusu Güvenliği & Eşzamanlı İstek Desteği
+- **Path Traversal / Keyfi Dosya Okuma Açığı Kapatıldı (`web_server.py`):**
+  - `/api/file-content` uç noktasında mutlak yol (`/etc/passwd`) veya `../` parametreleri ile proje dizini dışına çıkılması engellendi; birleşik yol `resolve()` edilerek proje sınırları doğrulanır, ihlal durumunda `403 Forbidden` döner.
+- **Eşzamanlı İstek & Donma Koruması (`ThreadingHTTPServer` & `_coordinator_lock`):**
+  - Tek iş parçacıklı `HTTPServer` yerine `ThreadingHTTPServer`'a geçildi; `/api/chat` streaming yanıtı sürerken arayüzün kilitlenmesi önlendi. Paylaşılan koordinatör nesnesine eşzamanlı erişim thread kilidi ile korundu.
+- **Hata Yanıtlarında JSON Güvenliği (`/api/settings`):**
+  - Exception mesajlarının düz string interpolasyonu yerine `json.dumps()` ile serileştirilmesi sağlanarak bozuk JSON üretimi engellendi.
+
 ## [1.5.0] - 2026-09-18
 
 ### 🤖 Yeni Yerel GGUF Modelleri & llama.cpp Dinamik Model Entegrasyonu
