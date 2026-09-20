@@ -510,12 +510,12 @@ def run_pipeline(
                     # Dosya yazılmadıysa (hem ilk çalışmada hem retry'da):
                     no_file_err = context.get(
                         "last_test_error",
-                        "KRITIK HATA: Hicbir dosya kaydedilemedi! "
-                        "Model, kod bloklarinin ILK satirina '# filepath: dosya.py' "
-                        "veya '// filepath: dosya.js' gibi FILEPATH YORUMU eklemedigi icin "
-                        "sistem dosyalari tanimlayamadi. "
-                        "Bir sonraki denemede TUM kod bloklarinin BIRINCI satirina "
-                        "filepath yorumunu KESINLIKLE ekle."
+                        "CRITICAL ERROR: No files were saved! "
+                        "The model failed to include a FILEPATH COMMENT like '# filepath: file.py' "
+                        "or '// filepath: file.js' on the VERY FIRST line of each code block, "
+                        "so the system could not identify or save the files. "
+                        "In your next attempt, you MUST add the filepath comment on the FIRST line "
+                        "of ALL code blocks."
                     )
                     context["last_test_error"] = no_file_err
                     error_history.append(no_file_err)
@@ -572,15 +572,14 @@ def run_pipeline(
                     )
                     print(f"\n  📝 [DEV OTOMATIK TAMAMLAMA] Mimaride planlanan {len(missing_files)} eksik dosya yazılıyor: {missing_files[:3]}...")
                     missing_msg = (
-                        f"MİMARİDE PLANLANAN ANCAK HENÜZ YAZILMAMIŞ {len(missing_files)} EKSİK DOSYA TESPİT EDİLDİ:\n"
+                        f"{len(missing_files)} MISSING FILES PLANNED IN ARCHITECTURE BUT NOT YET WRITTEN:\n"
                         + "\n".join(f"- {f}" for f in missing_files)
-                        + "\n\n🚨 GÖREV: Şimdi SADECE bu eksik dosyaları eksiksiz kodla. "
-                        + "Her dosya kod bloğunun birinci satırına, DOSYANIN GERÇEK UZANTISINA VE DİLİNE UYGUN "
-                        + "yorum sözdizimiyle filepath yorumu ekle (örn. '# filepath: klasor/dosya.py' sadece "
-                        + ".py dosyaları için, '// filepath: klasor/dosya.ts' .ts/.tsx/.js için, "
-                        + "'<!-- filepath: dosya.html -->' HTML için, '/* filepath: dosya.css */' CSS için). "
-                        + "ASLA otomatik olarak .py veya python varsayma — yukarıdaki eksik dosya listesindeki "
-                        + "gerçek uzantıyı kullan."
+                        + "\n\n🚨 TASK: Now implement ONLY these missing files completely. "
+                        + "On the very first line of each code block, include a filepath comment using the appropriate "
+                        + "comment syntax FOR THE ACTUAL FILE EXTENSION AND LANGUAGE (e.g. '# filepath: folder/file.py' "
+                        + "only for .py files, '// filepath: folder/file.ts' for .ts/.tsx/.js, "
+                        + "'<!-- filepath: file.html -->' for HTML, '/* filepath: styles.css */' for CSS). "
+                        + "NEVER automatically assume .py or Python — use the real file extension from the list above."
                     )
                     context["MISSING_FILES"] = missing_msg
                     # Developer'ı sıranın başına tekrar ekle
@@ -733,8 +732,8 @@ def run_pipeline(
                         queue.insert(0, _optimizer_agent)
                         queue.insert(0, dev_agent)
                         context["OPTIMIZER_FEEDBACK"] = (
-                            f"## OPTIMIZER RAPORU (Tur {retry_count})\n{raw[:2000]}\n\n"
-                            "Yukaridaki optimizasyon raporunu dikkate alarak kodu yeniden yaz."
+                            f"## OPTIMIZER REPORT (Round {retry_count})\n{raw[:2000]}\n\n"
+                            "Rewrite and optimize the code taking the optimization report above into account."
                         )
 
             # ── QA ajani ─────────────────────────────────────────────────────────────
@@ -797,11 +796,11 @@ def run_pipeline(
                             queue.insert(0, _optimizer_agent)
                         queue.insert(0, qa_agent)
                         queue.insert(0, dev_agent)
-                        feedback_msg = f"## QA TEST RAPORU (Deneme {retry_count}/{MAX_QA_RETRIES})\n{raw[:3000]}\n"
+                        feedback_msg = f"## QA TEST REPORT (Attempt {retry_count}/{MAX_QA_RETRIES})\n{raw[:3000]}\n"
                         if missing_files:
-                            feedback_msg += "\n🚨 MİMARİDE PLANLANAN ANCAK HENÜZ YAZILMAMIŞ EKSİK DOSYALAR:\n" + "\n".join(f"- {f}" for f in missing_files) + "\n"
+                            feedback_msg += "\n🚨 MISSING FILES PLANNED IN ARCHITECTURE BUT NOT YET WRITTEN:\n" + "\n".join(f"- {f}" for f in missing_files) + "\n"
                         if "last_test_error" in context:
-                            feedback_msg += f"\n## FIZIKSEL TEST HATASI\n{context['last_test_error'][:1500]}\n"
+                            feedback_msg += f"\n## PHYSICAL TEST ERROR\n{context['last_test_error'][:1500]}\n"
 
                         if qa_fail_streak >= 2 and "STUCK_ALERT" not in context:
                             hint = _STUCK_HINTS[stuck_hint_idx % len(_STUCK_HINTS)]

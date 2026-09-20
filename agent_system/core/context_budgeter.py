@@ -154,7 +154,7 @@ class ContextBudgeter:
             summary_lines.append(f"- [{role.upper()}]: {snippet}")
 
         summary_content = (
-            "--- [ÖZETLENMİŞ ESKİ SOHBET GEÇMİŞİ] ---\n"
+            "--- [SUMMARIZED CONVERSATION HISTORY] ---\n"
             + "\n".join(summary_lines)
             + "\n-----------------------------------------"
         )

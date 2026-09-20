@@ -99,12 +99,13 @@ class MicroFixEngine:
                 pass
 
         system_prompt = (
-            "Sen uzman bir kod onarım uzmanısın. "
-            "Sana hata logu ve sorunlu dosya verilecek. "
-            "SADECE hatayı cerrahi olarak düzelt. "
-            "Tüm dosyayı baştan yazma! Sadece değişecek kısmı şu SEARCH/REPLACE formatında ver:\n"
-            "```python\n# FILE: " + (file_path or "dosya.py") + "\n"
-            "<<<<<<< SEARCH\n(hatali eski kod)\n=======\n(duzeltilmis yeni kod)\n>>>>>>> REPLACE\n```"
+            "You are an expert code repair specialist.\n"
+            "You will be given an error log and the problematic file.\n"
+            "Fix the error SURGICALLY with minimal changes.\n"
+            "Do NOT rewrite the whole file! Provide only the modified section in SEARCH/REPLACE format:\n"
+            "```python\n# FILE: " + (file_path or "file.py") + "\n"
+            "<<<<<<< SEARCH\n(erroneous old code)\n=======\n(fixed new code)\n>>>>>>> REPLACE\n```\n"
+            "OUTPUT LANGUAGE: If you include explanations, write them in fluent Turkish."
         )
 
         for attempt in range(1, max_tries + 1):
@@ -119,10 +120,10 @@ class MicroFixEngine:
             )
 
             user_prompt = (
-                f"## HATA LOGU\n{error_log}\n\n"
-                f"## SORUNLU DOSYA: {file_path}\n```python\n# FILE: {file_path}\n"
+                f"## ERROR LOG\n{error_log}\n\n"
+                f"## PROBLEMATIC FILE: {file_path}\n```python\n# FILE: {file_path}\n"
                 f"{file_content[:8000]}\n```\n\n"
-                "Sadece bu dosyadaki hatayı SEARCH/REPLACE formatında cerrahi olarak düzelt."
+                "Surgically fix the error in this file using the SEARCH/REPLACE format."
             )
 
             t0 = time.monotonic()
@@ -213,13 +214,14 @@ class EscalationEngine:
         repomap = build_repomap(output_dir)
 
         system_prompt = (
-            "Sen kıdemli bir yazılım mimarısın.\n"
-            "Sana düzeltilmesi gereken bir hata veya kod eksikliği verilecek.\n\n"
-            "🚨 KESİN KURALLAR:\n"
-            "1. Mevcut proje dosya ağacına ve paket yapısına KESİNLİKLE SADIK KAL.\n"
-            "2. Asla mevcut mimariyi bozup sıfırdan farklı klasör yapısı (örn: 'src/' veya düz kök dosyalar) UYDURMA!\n"
-            "3. Mevcut dosyalardaki hataları düzeltirken SADECE SEARCH/REPLACE blokları kullan.\n"
-            "4. Her dosya bloğu # FILE: (veya // FILE:) ile başlamalı."
+            "You are a senior software architect and debugging specialist.\n"
+            "You will be provided with an error log or code defect.\n\n"
+            "🚨 STRICT RULES:\n"
+            "1. Strictly adhere to the existing project file tree and package structure.\n"
+            "2. NEVER invent a different directory hierarchy (e.g. inventing 'src/' or placing files at root when packages exist).\n"
+            "3. When fixing existing files, prefer SEARCH/REPLACE blocks.\n"
+            "4. Every file block MUST begin with # FILE: (or // FILE:, <!-- FILE:, etc.).\n"
+            "OUTPUT LANGUAGE: Always provide explanations and summaries to the user in fluent Turkish."
         )
 
         esc_step_id = log_store.start_step(
@@ -233,10 +235,10 @@ class EscalationEngine:
         )
 
         user_prompt = (
-            f"## HATA / ONARIM TALEBİ\n{error_log}\n\n"
-            f"## KOD TABANI GRAFİĞİ & HARİTASI\n{repomap[:4000]}\n\n"
-            f"## PROJE İSTEĞİ\n{context.get('project_brief', '')[:500]}\n\n"
-            "Bu hatayı kökten çöz. Değişiklikleri SEARCH/REPLACE blokları ile veya gerekirse tam dosya olarak uygula."
+            f"## ERROR / REPAIR REQUEST\n{error_log}\n\n"
+            f"## CODEBASE GRAPH & REPO MAP\n{repomap[:4000]}\n\n"
+            f"## PROJECT BRIEF\n{context.get('project_brief', '')[:500]}\n\n"
+            "Resolve this issue at its root cause. Apply changes using SEARCH/REPLACE blocks or complete files if creating new files."
         )
 
         t0 = time.monotonic()

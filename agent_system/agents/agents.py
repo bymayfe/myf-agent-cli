@@ -89,7 +89,7 @@ def load_agents(enabled_only: bool = True) -> list[AgentDefinition]:
         if system_prompt:
             from datetime import datetime
             cur_date = datetime.now().strftime("%d.%m.%Y")
-            system_prompt = f"BUGÜNÜN GÜNCEL TARİHİ: {cur_date}\n(Tüm kütüphane, paket ve mimari kararlarını güncel tarihe göre ver).\n\n" + system_prompt
+            system_prompt = f"TODAY'S CURRENT DATE: {cur_date}\n(Base all library, package, and architectural decisions on the current date).\n\n" + system_prompt
 
         agents.append(AgentDefinition(
             id                  = entry["id"],
@@ -162,99 +162,100 @@ def build_agent_prompt(
             label = _context_label(key)
             max_len = char_limits.get(key, 3000)
             if len(value) > max_len:
-                snippet = value[:max_len] + "\n...[kisaltildi]"
+                snippet = value[:max_len] + "\n...[truncated]"
             else:
                 snippet = value
             parts.append(f"=== {label} ===\n{snippet}")
 
-    # Mevcut dosyalar (Kompakt)
+    # Current files (Compact)
     if current_files:
         files_snippet = "\n".join(current_files[:40])
         if len(current_files) > 40:
-            files_snippet += f"\n... ve {len(current_files)-40} dosya daha"
-        parts.append(f"=== MEVCUT DOSYALAR ===\n{files_snippet}")
+            files_snippet += f"\n... and {len(current_files)-40} more files"
+        parts.append(f"=== CURRENT FILES ===\n{files_snippet}")
 
-    # Ajan gorevi
+    # Agent task
     task_hint = _task_hint(agent)
-    # Eger QA Feedback varsa developer'a KESIN KOD ZORUNLULUGU ekle
+    # If QA Feedback exists, enforce STRICT CODE ONLY constraint on developer
     if agent.role_type == "developer" and ("QA_FEEDBACK" in context or "last_test_error" in context):
         task_hint += (
-            "\n\n🚨 KESIN KURAL: YALNIZCA hatali dosyalari duzelten kod bloklari uret. "
-            "Sohbet, aciklama veya metin raporu yazmak KESINLIKLE YASAKTIR. "
-            "Cevabin SADECE projenin dilinde (Python, JS/TS, Go, Rust vb.) uygun "
-            "yorum satiriyla filepath belirtilmis kod bloklari veya "
-            "<<<<<<< SEARCH ... ======= ... >>>>>>> REPLACE bloklari icermelidir! "
-            "Dosya uzantisini VE yorum sozdizimini projenin gercek diline gore sec, "
-            "asla otomatik olarak .py veya python varsayma."
+            "\n\n🚨 STRICT RULE: Generate ONLY code blocks that fix the erroneous files. "
+            "Chit-chat, conversational filler, or text reports are STRICTLY FORBIDDEN. "
+            "Your response must ONLY contain code blocks with the appropriate filepath comment "
+            "for the project's language (Python, JS/TS, Go, Rust, etc.) or "
+            "<<<<<<< SEARCH ... ======= ... >>>>>>> REPLACE blocks! "
+            "Choose the file extension AND comment syntax based on the actual project language, "
+            "never assume .py or Python by default."
         )
 
-    parts.append(f"=== GOREV ===\n{task_hint}")
+    parts.append(f"=== TASK ===\n{task_hint}")
 
     return "\n\n".join(parts)
 
 
 def _context_label(key: str) -> str:
     labels = {
-        "project_brief"      : "PROJE ISTEGI",
-        "prd"                : "URUN GEREKSINIM BELGESI (PRD)",
-        "architecture"       : "MIMARI TASARIM",
-        "code_files"         : "MEVCUT KOD OZETI",
-        "repomap"            : "KOD TABANI HARITASI & GRAFIGI",
-        "codebase_graph"     : "KOD TABANI BILGI GRAFIGI",
-        "web_research"       : "WEB & GITHUB ARASTIRMA SONUCLARI",
-        "test_report"        : "TEST RAPORU",
-        "security_report"    : "GUVENLIK RAPORU",
-        "documentation"      : "DOKUMANTASYON",
-        "all_previous"       : "ONCEKI CIKTILAR",
-        "profiling_log"      : "PROFILING CALISTIRMA LOGU",
-        "optimization_report": "OPTIMIZASYON RAPORU",
-        "OPTIMIZE_MODE"      : "OPTIMIZE MODU TALIMATI",
-        "QA_FEEDBACK"        : "QA TEST GERI BILDIRIMI",
-        "STUCK_ALERT"        : "YAKLASIM DEGISTIRME UYARISI",
-        "OPTIMIZER_FEEDBACK" : "OPTIMIZER GERI BILDIRIMI",
-        "last_test_error"    : "FIZIKSEL TEST HATASI",
-        "MISSING_FILES"      : "MIMARIDEKI HENUZ YAZILMAMIS EKSIK DOSYALAR",
+        "project_brief"      : "PROJECT BRIEF",
+        "prd"                : "PRODUCT REQUIREMENTS DOCUMENT (PRD)",
+        "architecture"       : "ARCHITECTURAL DESIGN",
+        "code_files"         : "CURRENT CODE SUMMARY",
+        "repomap"            : "CODEBASE MAP & GRAPH",
+        "codebase_graph"     : "CODEBASE KNOWLEDGE GRAPH",
+        "web_research"       : "WEB & GITHUB RESEARCH RESULTS",
+        "test_report"        : "TEST REPORT",
+        "security_report"    : "SECURITY REPORT",
+        "documentation"      : "DOCUMENTATION",
+        "all_previous"       : "PREVIOUS OUTPUTS",
+        "profiling_log"      : "PROFILING EXECUTION LOG",
+        "optimization_report": "OPTIMIZATION REPORT",
+        "OPTIMIZE_MODE"      : "OPTIMIZE MODE DIRECTIVE",
+        "QA_FEEDBACK"        : "QA TEST FEEDBACK",
+        "STUCK_ALERT"        : "APPROACH CHANGE ALERT",
+        "OPTIMIZER_FEEDBACK" : "OPTIMIZER FEEDBACK",
+        "last_test_error"    : "PHYSICAL TEST ERROR",
+        "MISSING_FILES"      : "MISSING ARCHITECTURAL FILES NOT YET CREATED",
     }
     return labels.get(key, key.upper())
 
 
 def _task_hint(agent: AgentDefinition) -> str:
     hints = {
-        "product_manager"     : "Yukaridaki proje istegine gore eksiksiz PRD hazirla. Gerekirse web/dokuman arastirmasi talep et.",
-        "software_architect"  : "PRD'yi okuyup moduler Mimari Tasarim Belgesi hazirla.",
+        "product_manager"     : "Prepare a complete and comprehensive PRD based on the project brief above. Request web/doc research if needed. Present your output to the user in fluent Turkish.",
+        "software_architect"  : "Read the PRD and prepare a modular Architectural Design Document. Present your document and explanations to the user in fluent Turkish.",
         "developer"           : (
-            "Mimari tasarima ve mevcut kod tabanina gore TUM dosyalari eksiksiz yaz.\n\n"
-            "🔴 EN KRITIK KURAL — HER KOD BLOGUNUN ILK SATIRINA FILEPATH YORUMU EKLE:\n"
-            "  Python/Shell : # filepath: klasor/dosya.py\n"
-            "  JS/TS/Go/Rust: // filepath: klasor/dosya.js\n"
-            "  HTML         : <!-- filepath: dosya.html -->\n"
+            "Write ALL files completely according to the architectural design and existing codebase.\n\n"
+            "🔴 CRITICAL RULE — ADD A FILEPATH COMMENT ON THE FIRST LINE OF EVERY CODE BLOCK:\n"
+            "  Python/Shell : # filepath: folder/file.py\n"
+            "  JS/TS/Go/Rust: // filepath: folder/file.js\n"
+            "  HTML         : <!-- filepath: file.html -->\n"
             "  CSS/SCSS     : /* filepath: styles.css */\n"
             "  JSON/YAML    : // filepath: manifest.json\n"
             "  Markdown     : <!-- filepath: README.md -->\n"
-            "Bu yorum KOD BLOGUNUN ICINDE, BIRINCI SATIRDA olmali. "
-            "Blok disinda baslik veya aciklama olarak degil, BLOGUN ICINDE.\n"
-            "Bu yorum OLMADAN dosya KAYDEDILMEZ ve kodun uretilmemis sayilir!\n\n"
-            "Mevcut bir dosyada degisiklik: tumu yerine sadece degisen kismi yaz:\n"
-            "<<<<<<< SEARCH\n(eski kod)\n=======\n(yeni kod)\n>>>>>>> REPLACE\n\n"
-            "Yeni dosya: tam icerigi uret. TODO veya pass birakmak KESINLIKLE YASAKTIR."
+            "This comment MUST be INSIDE the code block, on the FIRST line. "
+            "NOT outside as a heading or markdown text, but INSIDE THE BLOCK.\n"
+            "WITHOUT this comment, the file CANNOT BE SAVED and will be treated as missing!\n\n"
+            "Modifying an existing file: write only the changed part instead of the whole file:\n"
+            "<<<<<<< SEARCH\n(old code)\n=======\n(new code)\n>>>>>>> REPLACE\n\n"
+            "New file: generate full content. Leaving TODOs or pass statements is STRICTLY PROHIBITED.\n"
+            "OUTPUT LANGUAGE: Communicate user-facing notes in fluent Turkish."
         ),
-        "qa_tester"           : "Uretilen kodu incele, Test Raporu ve pytest testleri yaz.",
+        "qa_tester"           : "Inspect the generated code, write a Test Report and pytest/unit tests. Present reports and notes to the user in fluent Turkish.",
         "reviewer"            : (
-            "QA raporundaki sorunlari duzelt. Mevcut dosyalarda tum dosyayi yazmak yerine "
-            "<<<<<<< SEARCH ... ======= ... >>>>>>> REPLACE bloklari ile cerrahi duzeltme yap, "
-            "CHANGELOG_ENTRY ekle."
+            "Fix the issues mentioned in the QA report. Perform surgical fixes on existing files using "
+            "<<<<<<< SEARCH ... ======= ... >>>>>>> REPLACE blocks instead of rewriting entire files. "
+            "Add a CHANGELOG_ENTRY. Present explanations to the user in fluent Turkish."
         ),
         "optimizer"           : (
-            "PROFILING CALISTIRMA LOGU ve KOD TABANI GRAFIGINI dikkatlice oku. "
-            "Hot-spot'lari tespit et. Mevcut dosyalarda SEARCH/REPLACE bloklariyla sadece "
-            "ilgili fonksiyonu optimize et. Rapor sonuna STATUS: OPTIMIZED veya STATUS: NEEDS_MORE yaz."
+            "Carefully examine the PROFILING EXECUTION LOG and CODEBASE GRAPH. "
+            "Identify hot-spots. Optimize only the relevant functions using SEARCH/REPLACE blocks. "
+            "End your report with STATUS: OPTIMIZED or STATUS: NEEDS_MORE. Present explanations in fluent Turkish."
         ),
-        "security_auditor"    : "Kodu OWASP Top 10 cercevesinde guvenlik acisindan incele ve rapor yaz.",
-        "documentation_writer": "Proje icin README.md, API.md ve CONTRIBUTING.md yaz.",
-        "devops_engineer"     : "Dockerfile, docker-compose.yml ve GitHub Actions CI pipeline yaz.",
-        "custom"              : "Yukaridaki tum baglami kullanarak gorevini yerine getir.",
+        "security_auditor"    : "Inspect the code for security vulnerabilities following OWASP Top 10 and write a report. Present findings in fluent Turkish.",
+        "documentation_writer": "Write README.md, API.md, and CONTRIBUTING.md for the project. Present explanations in fluent Turkish.",
+        "devops_engineer"     : "Write Dockerfile, docker-compose.yml, and GitHub Actions CI pipeline. Present explanations in fluent Turkish.",
+        "custom"              : "Perform your task using all the context provided above. Present responses to the user in fluent Turkish.",
     }
-    return hints.get(agent.role_type, "Gorevini yerine getir.")
+    return hints.get(agent.role_type, "Fulfill your task. Present user-facing responses in fluent Turkish.")
 
 
 

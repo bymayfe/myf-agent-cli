@@ -15,20 +15,20 @@ class StuckLoopDetector:
     """Ajanların aynı hatada kısır döngüye girmesini engeller ve yeni strateji önerir."""
 
     HINTS = [
-        ("[STUCK ALARM - FARKLI YAKLASIM #1] Ayni hata uc kez tekrarlandi. "
-         "Mevcut yaklasimi tamamen birak. Farkli bir kutaphane, algoritma veya "
-         "mimari sec (ornek: asyncio→threading, pandas→polars, OOP→fonksiyonel). "
-         "Onceki dosyalara bagli kalma, sifirdan farkli bir cozum yaz."),
-        ("[STUCK ALARM - FARKLI YAKLASIM #2] Ikinci stuck tespiti. Minimal parcala stratejisi: "
-         "Once SADECE tek bir fonksiyonu dogru calistiran en kucuk kodu yaz. "
-         "Karmasikligi adim adim ekle. Tum sistemi bir anda yazmaya calisma. "
-         "Basit, saf Python kullan, dis bagimliligi minimuma indir."),
-        ("[STUCK ALARM - FARKLI YAKLASIM #3] Ucuncu stuck. Hata veren modulu izole et: "
-         "Sadece o modulu sifirdan farkli bir design pattern ile yeniden yaz "
-         "(Factory, Strategy, Observer vb.). Geri kalan dosyalara dokunma."),
-        ("[STUCK ALARM - FARKLI YAKLASIM #4] Dorduncu stuck. Sorunu en temel bilesenlerine indir: "
-         "stdlib disinda hicbir dis kutuphane kullanmadan calis. "
-         "Oncelik: sadece calisir bir sonuc. Guzellik, performans sonra."),
+        ("[STUCK ALARM - DIFFERENT APPROACH #1] The same error occurred three times consecutively. "
+         "Completely abandon the current approach. Choose a different library, algorithm, or "
+         "architecture (e.g. asyncio->threading, pandas->polars, OOP->functional). "
+         "Do not cling to previous files; write a fresh, alternative solution."),
+        ("[STUCK ALARM - DIFFERENT APPROACH #2] Second stuck detection. Minimal decomposition strategy: "
+         "First, write ONLY the smallest working code that executes a single function correctly. "
+         "Add complexity step-by-step. Do not attempt to write the entire system at once. "
+         "Use simple, clean code and minimize external dependencies."),
+        ("[STUCK ALARM - DIFFERENT APPROACH #3] Third stuck. Isolate the failing module: "
+         "Rewrite only that module from scratch using a different design pattern "
+         "(Factory, Strategy, Observer, etc.). Leave remaining files untouched."),
+        ("[STUCK ALARM - DIFFERENT APPROACH #4] Fourth stuck. Reduce the problem to bare fundamentals: "
+         "Work without any external libraries beyond standard library. "
+         "Priority: produce a working result first. Optimization and aesthetics can come later."),
     ]
 
     @staticmethod

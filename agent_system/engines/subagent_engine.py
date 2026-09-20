@@ -211,7 +211,7 @@ class SubagentManager:
             defn = self.define_subagent(
                 name=name,
                 description=f"Dinamik oluşturulan {name} uzmanı",
-                system_prompt=f"Sen {role or name} konusunda uzmanlaşmış bir yapay zeka ajanısın.",
+                system_prompt=f"You are an AI assistant specialized in {role or name}.",
                 model=model,
             )
 
@@ -277,12 +277,12 @@ class SubagentManager:
                     logger.warning("[%s] Dosya ayrıştırılamadı, filepath hatırlatma turu yapılıyor...", name)
                     retry_prompt = (
                         f"{prompt}\n\n"
-                        "🔴 KRİTİK HATA VE ZORUNLU KURAL:\n"
-                        "Yukarıdaki görev için ürettiğin kod bloklarının İLK satırında `<!-- filepath: index.html -->`, "
-                        "`/* filepath: styles.css */` veya `// filepath: dosya.js` gibi dosya yolu yorumu bulunmadığı için "
-                        "sistem dosyaları kaydedemedi!\n"
-                        "Lütfen yukarıda istenen TÜM dosyaları, her kod bloğunun BİRİNCİ satırına "
-                        "ilgili filepath yorumunu ekleyerek EKSİKSİZ VE ÇALIŞIR ŞEKİLDE YENİDEN YAZ."
+                        "🔴 CRITICAL ERROR AND MANDATORY RULE:\n"
+                        "The system could not save your generated files because the VERY FIRST line of each code block "
+                        "did not contain a filepath comment like `<!-- filepath: index.html -->`, "
+                        "`/* filepath: styles.css */`, or `// filepath: file.js`!\n"
+                        "Please RE-WRITE ALL required files above with the appropriate filepath comment "
+                        "on the FIRST line of every code block, completely and fully functional."
                     )
                     raw_retry = call_llm(
                         agent_name=f"{name}-fix",
@@ -325,7 +325,7 @@ class SubagentManager:
         instance.state = "running"
         instance.state_detail = f"Yeni mesaj işleniyor: {message[:50]}..."
 
-        sys_prompt = instance.history[0]["content"] if instance.history else "Sen uzman bir yapay zeka ajanısın."
+        sys_prompt = instance.history[0]["content"] if instance.history else "You are an expert AI assistant."
         # Subagent hafızası context limitine yaklaştığında öngörülü özetle
         if context_budgeter.should_summarize(sys_prompt, instance.history, instance.model, threshold=0.75):
             instance.history = context_budgeter.summarize_history(instance.history, keep_recent=4)
@@ -515,21 +515,21 @@ class SubagentOrchestrator:
             progress_callback(1, 4, None, "start", {"agent_name": "Lider Ajan", "role": "Görev Ayrıştırma"})
 
         leader_prompt = (
-            f"PROJE İSTEĞİ VE TEKNİK ŞARTLAR:\n{project_brief}\n\n"
-            "GÖREV:\n"
-            "Sen uzman bir Proje Mimarı ve Lider Orkestratörsün. Bu projeyi EN ÇEVİK, EN DOĞRU ve EKSİKSİZ şekilde inşa etmek için "
-            "tam olarak İHTİYAÇ KADAR alt uzman ajan belirle.\n\n"
-            "STRATEJİ VE PRENSİPLER:\n"
-            "1. Gereksiz yapay adımlar ve şişirme roller YARATMA. İhtiyaç ne kadarsa o kadar alt ajan belirle "
-            "(Basit/orta işlerde 1 veya 2 uzman, karmaşık/çok katmanlı sistemlerde gerektiği kadar uzman).\n"
-            "2. Proje saf Vanilla JS/HTML/CSS gibi bir arayüz veya frontend işi ise: Doğrudan tüm dosyaları eksiksiz yazacak "
-            "bir `frontend_developer` veya `web_engineer` görevlendir. İstenmeyen backend, npm veya TypeScript ekleme.\n"
-            "3. Her ajanın görev tanımında, üreteceği dosyaları (örn: `index.html`, `styles.css`, `app.js`, `storage.js`, `notify.js`) açıkça belirt.\n\n"
-            "Çıktını SADECE aşağıdaki JSON formatında ver:\n"
+            f"PROJECT BRIEF AND TECHNICAL SPECIFICATIONS:\n{project_brief}\n\n"
+            "TASK:\n"
+            "You are an expert Project Architect and Lead Orchestrator. Determine ONLY the necessary "
+            "subagent specialists needed to build this project in the most agile, accurate, and complete way.\n\n"
+            "STRATEGY AND PRINCIPLES:\n"
+            "1. Do NOT create artificial or bloated roles. Keep it lean (1-2 specialists for simple/medium tasks, "
+            "as many as needed for complex multi-tier systems).\n"
+            "2. If the project is a pure Vanilla JS/HTML/CSS UI or frontend task: Assign a `frontend_developer` or "
+            "`web_engineer` who writes all files directly. Do not introduce unwanted backend, npm, or TypeScript.\n"
+            "3. In each agent's task description, explicitly state the files to generate (e.g., `index.html`, `styles.css`, `app.js`, `storage.js`).\n\n"
+            "Output ONLY the following JSON format:\n"
             "```json\n"
             "[\n"
-            "  {\"name\": \"web_developer\", \"role\": \"Web Arayüz & Çekirdek Kod Uzmanı\", \"task\": \"index.html, styles.css, app.js, storage.js ve notify.js dosyalarını eksiksiz kod blokları olarak üret.\"},\n"
-            "  {\"name\": \"qa_tester\", \"role\": \"Test ve Doğrulama Uzmanı\", \"task\": \"Kullanım ve doğrulama senaryolarını tamamla.\"}\n"
+            "  {\"name\": \"web_developer\", \"role\": \"Web UI & Core Code Specialist\", \"task\": \"Produce index.html, styles.css, app.js, storage.js as complete code blocks.\"},\n"
+            "  {\"name\": \"qa_tester\", \"role\": \"Testing & Verification Specialist\", \"task\": \"Complete usage and verification scenarios.\"}\n"
             "]\n"
             "```"
         )
@@ -539,7 +539,7 @@ class SubagentOrchestrator:
         try:
             raw_plan = call_llm(
                 agent_name="orchestrator",
-                system_prompt="Sen uzman bir yazılım proje mimarı ve orkestratörüsün. Görevin projeyi tam ihtiyaç kadar temiz alt uzmanlıklara bölmektir.",
+                system_prompt="You are an expert software project architect and orchestrator. Your task is to decompose the project into clean, specialized sub-tasks as needed.",
                 user_prompt=leader_prompt,
                 model=settings.planning_model,
             )

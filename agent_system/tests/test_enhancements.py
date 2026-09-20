@@ -1347,7 +1347,7 @@ def test_context_budgeter_should_summarize_and_compaction():
     compacted = budgeter.summarize_history(history, keep_recent=4)
     assert len(compacted) == 5  # 1 özet bloğu + 4 son mesaj
     assert compacted[0]["role"] == "system"
-    assert "[ÖZETLENMİŞ ESKİ SOHBET GEÇMİŞİ]" in compacted[0]["content"]
+    assert "[SUMMARIZED CONVERSATION HISTORY]" in compacted[0]["content"]
     assert compacted[-1]["content"] == history[-1]["content"]
 
 
@@ -1377,7 +1377,7 @@ def test_coordinator_agent_triggers_auto_summarize_integration(monkeypatch):
     assert len(sent_messages) > 0
     # Gönderilen mesajlar içinde özet bloğu bulunmalı
     system_msgs = [m for m in sent_messages if m.get("role") == "system"]
-    assert any("[ÖZETLENMİŞ ESKİ SOHBET GEÇMİŞİ]" in m.get("content", "") for m in system_msgs)
+    assert any("[SUMMARIZED CONVERSATION HISTORY]" in m.get("content", "") for m in system_msgs)
 
 
 def test_context_budgeter_proactive_should_summarize_with_avg_turn(monkeypatch, tmp_path):
@@ -1429,7 +1429,7 @@ def test_subagent_engine_send_message_triggers_auto_summarize_integration(monkey
     manager.send_message("sub-123", "yeni talimat")
 
     # Instance history özetlenmiş olmalı (özet bloğu eklenmiş olmalı)
-    assert any("[ÖZETLENMİŞ ESKİ SOHBET GEÇMİŞİ]" in m.get("content", "") for m in inst.history)
+    assert any("[SUMMARIZED CONVERSATION HISTORY]" in m.get("content", "") for m in inst.history)
 
 
 
