@@ -45,6 +45,11 @@ for _sub in [_HERE, _HERE / "core", _HERE / "engines", _HERE / "agents", _HERE /
     if _sub.is_dir() and _s not in sys.path:
         sys.path.insert(0, _s)
 
+# Eger sistem python ile calistirildiysa .venv paketlerini sys.path'e ekle
+for _site in (_HERE / ".venv" / "lib").glob("python*/site-packages"):
+    if _site.is_dir() and str(_site) not in sys.path:
+        sys.path.insert(0, str(_site))
+
 # ── Renkler (colorama) ────────────────────────────────────────────────────
 try:
     from colorama import init as _cinit, Fore, Style

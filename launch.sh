@@ -93,14 +93,14 @@ fi
 # 6. Komut argümanı kontrolü (manage / agents komutları için)
 if [ "$1" = "agents" ] || [ "$1" = "manage" ]; then
     shift
-    python3 manage_agents.py "$@"
+    "$SCRIPT_DIR/agent_system/.venv/bin/python3" manage_agents.py "$@"
     exit 0
 fi
 
 # 7. Ana chat arayüzünü başlat
 echo -e "${GREEN}[BAŞLATILIYOR] chat.py${NC}"
 echo ""
-python3 chat.py "$@"
+"$SCRIPT_DIR/agent_system/.venv/bin/python3" chat.py "$@"
 EXIT_CODE=$?
 
 echo ""
