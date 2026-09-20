@@ -999,7 +999,7 @@ class WebHarnessHandler(BaseHTTPRequestHandler):
             with WebHarnessHandler._coordinator_lock:
                 if not WebHarnessHandler.coordinator:
                     WebHarnessHandler.coordinator = CoordinatorAgent()
-                WebHarnessHandler.coordinator.reset()
+                WebHarnessHandler.coordinator.reset(new_session=False)
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.end_headers()

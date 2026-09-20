@@ -106,6 +106,7 @@ class Session:
         self.conversation_history = conversation_history or []
         self.created_at = created_at or datetime.now().isoformat()
         self.updated_at = updated_at or datetime.now().isoformat()
+        self.is_resumed = False
 
         # Aktif output dizinini güncelle
         set_output_dir(str(self.project_dir))
@@ -280,6 +281,7 @@ class Session:
                 updated_at=raw.get("updated_at"),
             )
             s.project_dir = dir_path
+            s.is_resumed = True
             return s
         except Exception:
             return None
@@ -520,19 +522,47 @@ class SessionManager:
         if hasattr(self, "current_session") and self.current_session:
             self.current_session.cleanup_if_empty()
 
+        target_path = Path(session_dict["path"]).resolve()
         if session_dict.get("session_obj"):
             s = session_dict["session_obj"]
+            s.project_dir = target_path
+            s.folder_name = target_path.name
         else:
-            p = Path(session_dict["path"])
-            s = Session(
-                session_id=session_dict["session_id"],
-                title=session_dict["title"],
-                folder_name=p.name,
-            )
+            s = Session.load_from_dir(target_path)
+            if not s:
+                s = Session(
+                    session_id=session_dict.get("session_id"),
+                    title=session_dict.get("title", target_path.name),
+                    folder_name=target_path.name,
+                )
+                s.project_dir = target_path
 
+        s.is_resumed = True
         set_output_dir(str(s.project_dir))
         self.current_session = s
+        self.register_external_session(s.project_dir)
         return s
+
+    def load_session(self, session_id_or_path: str) -> Optional[Session]:
+        """Verilen ID veya klasör yoluna sahip oturumu bulup aktif yapar."""
+        sessions = self.list_all_sessions()
+        target_str = str(session_id_or_path).strip()
+        for s in sessions:
+            if s.get("session_id") == target_str or s.get("path") == target_str or s.get("folder_name") == target_str:
+                return self.resume_session(s)
+        # Yol olarak doğrudan kontrol
+        p = Path(target_str).resolve()
+        if p.exists() and p.is_dir():
+            s_obj = Session.load_from_dir(p)
+            dummy = {
+                "session_id": s_obj.session_id if s_obj else f"sess-{p.name[:8]}",
+                "title": s_obj.title if s_obj else p.name,
+                "folder_name": p.name,
+                "path": str(p),
+                "session_obj": s_obj,
+            }
+            return self.resume_session(dummy)
+        return None
 
     def delete_session(self, target_path_or_id: str, delete_files: bool = False) -> bool:
         """

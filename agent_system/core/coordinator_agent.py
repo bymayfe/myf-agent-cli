@@ -403,10 +403,11 @@ class CoordinatorAgent:
             return base
         return ""
 
-    def reset(self) -> None:
-        """Sohbet gecmisini temizle, yeni proje oturumu ac."""
+    def reset(self, new_session: bool = False) -> None:
+        """Sohbet gecmisini temizle ve promptu yenile. Sadece new_session=True ise yeni oturum acar."""
         self.history.clear()
-        session_manager.create_new_session("Yeni Oturum", "yeni_proje")
+        if new_session:
+            session_manager.create_new_session("Yeni Oturum", "yeni_proje")
         self._rebuild_system_prompt()
 
     def refresh_settings(self) -> None:

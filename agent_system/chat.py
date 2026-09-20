@@ -829,7 +829,7 @@ class CommandHub:
         manage = _HERE / "agents" / "manage_agents.py" if (_HERE / "agents" / "manage_agents.py").exists() else _HERE / "manage_agents.py"
         if manage.exists():
             subprocess.run([sys.executable, str(manage), "add"])
-            self.coord.reset()
+            self.coord.refresh_settings()
             ChatUI.system("Agent eklendi.")
 
     def _permission_menu(self, _):
@@ -862,13 +862,13 @@ class CommandHub:
         if manage.exists():
             if arg:
                 subprocess.run([sys.executable, str(manage), "remove", arg])
-                self.coord.reset()
+                self.coord.refresh_settings()
                 return
             subprocess.run([sys.executable, str(manage), "list"])
             aid = input(ChatUI._c("\n  Silmek istediginiz Agent ID (0=iptal): ", Fore.YELLOW)).strip()
             if aid and aid != "0":
                 subprocess.run([sys.executable, str(manage), "remove", aid])
-                self.coord.reset()
+                self.coord.refresh_settings()
 
     def _delete_dispatcher(self, arg: str):
         """
@@ -1014,7 +1014,7 @@ class CommandHub:
     def _clear_screen_and_chat(self, _):
         """Ekranı temizler ve mevcut NOVA sohbet geçmişini sıfırlar."""
         os.system("cls" if os.name == "nt" else "clear")
-        self.coord.reset()
+        self.coord.reset(new_session=False)
         ChatUI.header()
         ChatUI.success("Ekran ve aktif sohbet geçmişi temizlendi! Sıfırdan başlayabilirsiniz.")
 
@@ -1376,7 +1376,7 @@ class CommandHub:
         slug  = arg.strip() if arg else "yeni_proje"
 
         sess = session_manager.create_new_session(title=title, slug=slug)
-        self.coord.reset()
+        self.coord.reset(new_session=False)
 
         ChatUI.success(f"Yeni oturum baslatildi! (Session ID: {sess.session_id})")
         ChatUI.info(f"📁 Klasor: {sess.project_dir}")
@@ -1703,8 +1703,8 @@ class ChatSession:
 
             curr_sess = session_manager.current_session
 
-            # 1. İlk anlamlı kullanıcı mesajında otomatik başlık ve slug ata
-            if curr_sess and (curr_sess.title in ("Yeni Oturum", "Yeni Proje") or "yeni_proje" in curr_sess.folder_name):
+            # 1. İlk anlamlı kullanıcı mesajında otomatik başlık ve slug ata (Sadece YENİ oturumlarda)
+            if curr_sess and not getattr(curr_sess, "is_resumed", False) and (curr_sess.title in ("Yeni Oturum", "Yeni Proje") or "yeni_proje" in curr_sess.folder_name):
                 u_clean = user_input.strip()
                 if len(u_clean) > 3 and u_clean.lower() not in ("selam", "merhaba", "hey", "test", "/run", "evet", "başla", "onay", "ok"):
                     smart_title, smart_slug = extract_smart_title_and_slug(u_clean)
@@ -1758,7 +1758,6 @@ class ChatSession:
                 
             # Bir yolun sohbet metninde geçmesi dosya okunması veya proje
             # değiştirilmesi için yeterli değildir. Bunun yerine /attach kullanılır.
-            import re
             path_pattern = r'((?:[A-Za-z]:[\\/]|/(?:home|Users|var/www|srv|mnt|media|tmp|opt|Desktop|Projects)/|[.]{1,2}[\\/])[^\s"\'<>\|]+)'
             matches = []  # Bağlama yalnızca /attach veya tek başına sürükle-bırak ile eklenir.
             for match in matches:
@@ -1912,6 +1911,10 @@ class ChatSession:
                     self.ui.error(f"Arama sonrası LLM hatası: {exc}")
                 finally:
                     self.ui.stream_end()
+
+            # Her sohbet dönümünde konuşma geçmişini aktif oturuma kaydet
+            if curr_sess and self.coord.history:
+                curr_sess.save(self.coord.history)
 
             # Pipeline dışındaki kod blokları otomatik yazılmaz; kullanıcı
             # /apply ile onaylayana kadar yalnızca bekleyen değişiklik olur.

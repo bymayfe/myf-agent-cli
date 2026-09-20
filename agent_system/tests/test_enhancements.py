@@ -1956,3 +1956,55 @@ def test_run_pipeline_start_from_role_skips_prior_agents():
             assert res["project_dir"] == td
 
 
+def test_resume_session_preserves_path_and_marks_resumed(tmp_path):
+    """resume_session yapıldığında hedef klasörün korunduğunu ve is_resumed=True olduğunu doğrula."""
+    from session_manager import SessionManager, Session
+    sm = SessionManager()
+
+    ext_project = tmp_path / "my_custom_project"
+    ext_project.mkdir()
+    (ext_project / "app.py").write_text("print('hello')", encoding="utf-8")
+
+    session_dict = {
+        "session_id": "sess-test1234",
+        "title": "Custom Project",
+        "folder_name": "my_custom_project",
+        "path": str(ext_project),
+        "session_obj": None,
+    }
+
+    resumed = sm.resume_session(session_dict)
+    assert resumed.is_resumed is True
+    assert resumed.project_dir == ext_project
+    assert resumed.folder_name == "my_custom_project"
+    assert sm.current_session == resumed
+
+
+def test_coordinator_reset_does_not_create_new_session():
+    """CoordinatorAgent.reset() çağrıldığında mevcut oturumun korunmasını ve yeni oturum açılmamasını doğrula."""
+    from coordinator_agent import CoordinatorAgent
+    from session_manager import session_manager
+
+    initial_session_id = session_manager.current_session.session_id
+    coord = CoordinatorAgent()
+    coord.history.append({"role": "user", "content": "hello world"})
+
+    coord.reset(new_session=False)
+    assert len(coord.history) == 0
+    assert session_manager.current_session.session_id == initial_session_id
+
+
+def test_read_brain_does_not_create_ghost_directory(tmp_path, monkeypatch):
+    """read_brain() çağrısının diskte zorla boş .myfcli klasörü oluşturmadığını doğrula."""
+    import brain
+    ghost_dir = tmp_path / "ghost_project"
+    monkeypatch.setattr("brain.get_output_dir", lambda: str(ghost_dir))
+
+    assert not ghost_dir.exists()
+    content = brain.read_brain()
+    assert "(henüz doldurulmadı)" in content
+    # ghost_dir ve .myfcli klasörü diskte oluşturulmamış olmalı:
+    assert not (ghost_dir / ".myfcli").exists()
+
+
+

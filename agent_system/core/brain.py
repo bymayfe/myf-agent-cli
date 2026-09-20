@@ -145,21 +145,28 @@ def _locked_write(
     return False
 
 
-def _ensure_myfcli_dir() -> Path:
+def _myfcli_dir(create: bool = False) -> Path:
     out_dir = get_output_dir()
     if not out_dir or str(Path(out_dir).resolve()) in ("/", "\\", "/bin", "/etc", "/usr", "/var", "/dev", "/proc", "/sys", "/root"):
         out_dir = str(PROJECTS_BASE_DIR / "Yeni_Proje")
         set_output_dir(out_dir)
     base = Path(out_dir)
-    try:
-        base.mkdir(parents=True, exist_ok=True)
-    except Exception:
-        base = PROJECTS_BASE_DIR / "Yeni_Proje"
-        base.mkdir(parents=True, exist_ok=True)
-        set_output_dir(str(base))
     myfcli_dir = base / ".myfcli"
-    myfcli_dir.mkdir(parents=True, exist_ok=True)
+    if create:
+        try:
+            base.mkdir(parents=True, exist_ok=True)
+            myfcli_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            base = PROJECTS_BASE_DIR / "Yeni_Proje"
+            base.mkdir(parents=True, exist_ok=True)
+            myfcli_dir = base / ".myfcli"
+            myfcli_dir.mkdir(parents=True, exist_ok=True)
+            set_output_dir(str(base))
     return myfcli_dir
+
+
+def _ensure_myfcli_dir() -> Path:
+    return _myfcli_dir(create=True)
 
 
 # ==============================================================================
@@ -168,14 +175,16 @@ def _ensure_myfcli_dir() -> Path:
 
 def _migrate_file(old_name: str, new_name: str) -> None:
     old_p = Path(get_output_dir()) / old_name
-    new_p = _ensure_myfcli_dir() / new_name
-    if old_p.exists() and not new_p.exists():
-        old_p.rename(new_p)
+    if old_p.exists():
+        new_p = _ensure_myfcli_dir() / new_name
+        if not new_p.exists():
+            old_p.rename(new_p)
 
 
-def _brain_path() -> Path:
-    _migrate_file(".agent_brain.md", "agent_brain.md")
-    return _ensure_myfcli_dir() / "agent_brain.md"
+def _brain_path(create: bool = False) -> Path:
+    if create:
+        _migrate_file(".agent_brain.md", "agent_brain.md")
+    return _myfcli_dir(create=create) / "agent_brain.md"
 
 def _changelog_path() -> Path:
     _migrate_file("CHANGELOG.md", "CHANGELOG.md")
@@ -191,7 +200,7 @@ def _ensure_output_dir():
 
 
 def get_brain_file() -> Path:
-    return _brain_path()
+    return _brain_path(create=False)
 
 
 def get_changelog_file() -> Path:
@@ -228,10 +237,20 @@ _BRAIN_TEMPLATE = """\
 
 
 def read_brain() -> str:
-    """Mevcut brain dosyasını oku; yoksa boş şablon döndür."""
-    p = _brain_path()
+    """Mevcut brain dosyasını oku; yoksa boş şablon döndür. ASLA boş klasör oluşturmaz."""
+    p = _brain_path(create=False)
     if p.exists():
-        return p.read_text(encoding="utf-8")
+        try:
+            return p.read_text(encoding="utf-8")
+        except Exception:
+            pass
+    # Eski lokasyon kontrolü
+    old_p = Path(get_output_dir()) / ".agent_brain.md"
+    if old_p.exists():
+        try:
+            return old_p.read_text(encoding="utf-8")
+        except Exception:
+            pass
     return _BRAIN_TEMPLATE
 
 
