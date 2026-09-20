@@ -1288,12 +1288,13 @@ class CommandHub:
             sess.set_title(target_path.name)
             files = list_output_files()
 
-            summary = f"Baglanan Proje Klasoru: '{target_path.name}' ({len(files)} dosya):\n" + "\n".join(f"- {f}" for f in files[:25])
+            summary = f"Attached Project Folder: '{target_path.name}' ({len(files)} files):\n" + "\n".join(f"- {f}" for f in files[:25])
             self.coord.history.append({
                 "role": "system",
-                "content": f"Kullanici harici bir proje klasoru bagladi ({target_path}). "
-                           f"Proje dosyalari: {summary}. "
-                           f"Bu var olan proje uzerindeki yeni istek ve duzenlemelere yardimci ol."
+                "content": f"The user attached an external project folder ({target_path}). "
+                           f"Project files: {summary}. "
+                           f"Assist with new requests and modifications on this existing project. "
+                           f"Communicate with the user in fluent Turkish."
             })
             session_manager.current_session.save(self.coord.history)
 

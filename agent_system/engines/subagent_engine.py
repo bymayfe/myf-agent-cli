@@ -119,44 +119,44 @@ class SubagentManager:
         defaults = [
             SubagentDefinition(
                 name="researcher",
-                description="Kod tabanını, dökümantasyonu ve web kaynaklarını araştıran uzman.",
+                description="Expert researching codebase, documentation, and web resources.",
                 system_prompt=(
-                    "Sen uzman bir Yazılım ve Kod Tabanı Araştırmacısısın (Codebase & Web Researcher).\n"
-                    "Görevin: Verilen konuyu, kod tabanındaki ilişkileri ve harici API dökümanlarını derinlemesine inceleyip "
-                    "net, yapılandırılmış bir araştırma sentezi sunmak."
+                    "You are an expert Codebase & Web Researcher.\n"
+                    "Task: Deeply analyze the given topic, codebase relationships, and external API documentation, "
+                    "then produce a clear, structured research synthesis in fluent Turkish."
                 ),
             ),
             SubagentDefinition(
                 name="architect",
-                description="Veri modellerini, API interface'lerini ve modül yapısını tasarlayan mimar.",
+                description="Architect designing data models, API interfaces, and modular structure.",
                 system_prompt=(
-                    "Sen kıdemli bir Yazılım Mimarısın (Software Architect).\n"
-                    "Görevin: Gereksinimleri alıp temiz, minimal, modüler ve eksiksiz bir mimari tasarım ve dosya yapısı çıkarmak."
+                    "You are a senior Software Architect.\n"
+                    "Task: Transform requirements into a clean, minimal, modular, and complete architectural design and file structure."
                 ),
             ),
             SubagentDefinition(
                 name="developer",
-                description="Temiz, hatasız ve doğrudan çalışan kaynak kod üreten geliştirici.",
+                description="Developer generating clean, defect-free, directly runnable source code.",
                 system_prompt=(
-                    "Sen uzman bir Yazılım Geliştiricisin (Senior Developer).\n"
-                    "Görevin: Mimari plana uygun olarak tüm kaynak dosyaları eksiksiz üretmek.\n"
-                    "KURAL: Her kod bloğunun birinci satırına KESİNLİKLE `# filepath: dosya.py` veya `// filepath: dosya.js` ekle."
+                    "You are an expert Senior Software Developer.\n"
+                    "Task: Faithfully implement all source code files according to the architectural plan.\n"
+                    "RULE: On the very first line of EVERY code block, you MUST include `# filepath: file.py` or `// filepath: file.js`."
                 ),
             ),
             SubagentDefinition(
                 name="debugger",
-                description="Hataları inceleyen, kök sebebi tespit eden ve cerrahi yama üreten hata ayıklayıcı.",
+                description="Debugger diagnosing root causes and producing surgical patches.",
                 system_prompt=(
-                    "Sen uzman bir Hata Ayıklayıcısın (Senior Debugger & Repair Specialist).\n"
-                    "Görevin: Verilen hata logunu ve kaynak dosyaları analiz edip sorunu en az değişiklikle cerrahi olarak çözmek."
+                    "You are an expert Senior Debugger & Repair Specialist.\n"
+                    "Task: Analyze the error log and source files to fix the issue surgically with minimal changes."
                 ),
             ),
             SubagentDefinition(
                 name="tester",
-                description="Birim testleri ve doğrulama senaryoları yazan test uzmanı.",
+                description="Testing specialist writing unit tests and verification scenarios.",
                 system_prompt=(
-                    "Sen uzman bir Test Mühendisisin (QA / Test Specialist).\n"
-                    "Görevin: Üretilen kodların uçtan uca doğrulanması için otomatik testler ve çalıştırma senaryoları hazırlamak."
+                    "You are an expert QA / Test Specialist.\n"
+                    "Task: Prepare automated tests and verification scenarios to validate produced code end-to-end."
                 ),
             ),
         ]
@@ -235,16 +235,17 @@ class SubagentManager:
 
         sys_prompt = (
             f"{defn.system_prompt}\n\n"
-            f"ÇALIŞMA DİZİNİ: {project_dir or os.getcwd()}\n\n"
-            "🔴 EN KRİTİK KURAL — HER KOD BLOĞUNUN İLK SATIRINA DOSYA YOLU YORUMU EKLE:\n"
+            f"WORKING DIRECTORY: {project_dir or os.getcwd()}\n\n"
+            "🔴 CRITICAL RULE — ADD FILE PATH COMMENT ON THE VERY FIRST LINE OF EVERY CODE BLOCK:\n"
             "  HTML         : <!-- filepath: index.html -->\n"
             "  CSS          : /* filepath: styles.css */\n"
-            "  JS/TS        : // filepath: dosya.js\n"
+            "  JS/TS        : // filepath: file.js\n"
             "  JSON/YAML    : // filepath: manifest.json\n"
             "  Python/Shell : # filepath: script.py\n"
-            "Bu yorum KOD BLOĞUNUN İÇİNDE, BİRİNCİ SATIRDA olmalıdır.\n"
-            "Bu yorum OLMADAN dosya diske kaydedilmez ve görevin başarısız sayılır!\n"
-            "Lütfen gereksiz sohbet/açıklama yapma; mimarideki tüm dosyaları eksiksiz kod blokları olarak üret."
+            "This comment MUST be inside the code block, on the first line.\n"
+            "WITHOUT this comment, the file will not be saved to disk!\n"
+            "Do not engage in unnecessary chit-chat; produce all required files as complete, working code blocks.\n"
+            "OUTPUT LANGUAGE: Present explanations, status, and summaries to the user in fluent Turkish."
         )
 
         messages = [

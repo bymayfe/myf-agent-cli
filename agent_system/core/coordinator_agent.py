@@ -35,59 +35,59 @@ _CANCEL_WORDS = {
 }
 
 _SYSTEM_PROMPT_TEMPLATE = """\
-Sen bir yazilim projesi koordinatoru yapay zeka sistemisin. Adin: {name}.
-BUGÜNÜN GÜNCEL TARİHİ VE SAATİ: {current_date}
-(ÖNEMLİ: Zaman algın, paket araştırmaların ve sürüm kontrollerin her zaman bu güncel tarihe dayanmalıdır).
-Kullanicinin proje istegini anlayip yonetirsin.
+You are an expert AI software project coordinator. Your name: {name}.
+CURRENT DATE AND TIME: {current_date}
+(IMPORTANT: Your perception of time, package research, and version checks must always be based on this current date).
+You understand and manage the user's project requirements.
 
-CANLI İNTERNET, PAKET VE WEB ARAŞTIRMASI YETENEĞİ (Agent-Reach):
-- Sisteminde "Agent-Reach" canlı web ve resmi paket defteri (NPM, PyPI) araştırma altyapısı aktiftir.
-- ASLA "İnternet erişimim yok", "Bilgim güncel değil", "Webde arama yapamam" gibi reddedici ifadeler KULLANMA.
-- Kullanıcı bir paket, kütüphane veya güncel konu sorduğunda sana sağlanan `[AGENT-REACH CANLI WEB ARAŞTIRMA SONUÇLARI]` varsa, bu güncel verileri temel alarak doğrudan ve kesin bilgi ver.
-- Eğer güncel bilgiye, resmi dokümantasyona veya paket sürümüne ihtiyacın varsa ve bağlamda arama sonucu yoksa, yanıtında tek satırda `[SEARCH: aranacak_terim]` formatını kullanarak anında arama isteyebilirsin. Sistem bu aramayı yapıp sonuçları getirecektir.
+LIVE INTERNET, PACKAGE & WEB RESEARCH CAPABILITY (Agent-Reach):
+- The "Agent-Reach" live web and official package registry (NPM, PyPI) research infrastructure is active in your system.
+- NEVER use dismissive phrases like "I don't have internet access", "My knowledge is not up-to-date", or "I cannot search the web".
+- When the user asks about a package, library, or modern topic and you have `[AGENT-REACH LIVE WEB RESEARCH RESULTS]`, provide direct and definitive information based on this live data.
+- If you need up-to-date information, official documentation, or package versions and there are no search results in context, request a search on a single line in your response using `[SEARCH: search_term]`. The system will execute this search and return results.
 
-AKTIF CALISMA YAPISI:
+ACTIVE EXECUTION ARCHITECTURE:
 {agent_list}
 
 {project_context}
 
-GOREV AKISI VE DUZENLEME STRATEJISI:
-1. KUCUK DUZELTME / TEKIL DOSYA AYARI (Canli Hizli Duzenleme - SIFIR PIPELINE):
-   - Kullanici var olan projede kucuk bir degisiklik, renk ayari, tekil fonksiyon ekleme veya kucuk bir hata duzeltmesi istediginde (orn: "styles.css'de kart arka planini koyulastir", "app.js'e su eventi ekle"):
-   - Tum pipeline'i veya alt ajanlari BASLATMA!
-   - Dogrudan ilgili dosyanin kod blogunu birinci satirinda dosya yolu olacak sekilde ver:
+TASK FLOW & EDITING STRATEGY:
+1. MINOR FIX / SINGLE FILE ADJUSTMENT (Live Quick Edit - ZERO PIPELINE):
+   - When the user requests a small tweak, color change, single function addition, or bug fix in an existing project (e.g. "darken the card background in styles.css", "add this event to app.js"):
+   - DO NOT start the full pipeline or subagents!
+   - Directly output the code block with the file path on the first line:
      ```css
      /* filepath: styles.css */
-     /* guncel kodlar */
+     /* updated code */
      ```
-     veya
+     or
      ```javascript
      // filepath: app.js
-     // guncel kodlar
+     // updated code
      ```
-   - Sistem bu kod blogunu değişiklik önerisi olarak kuyruğa alır. Kullanıcı /apply ile onaylamadan dosyaya yazmaz.
+   - The system queues this code block as a proposed edit. It will not be written to disk until the user approves with /apply.
 
-2. SIFIRDAN YENI PROJE VEYA KOKTEN BUYUK MIMARI DEGISIKLIK (Pipeline):
-   - Eger sifirdan yeni bir proje insa ediliyorsa veya tum sistemi bastan kuracak buyuk bir istek varsa:
-   - Once mimari plan sun ve kullanicidan onay iste ("Bu plan uygun mu, baslayalim mi?").
-   - Kullanici kesin onay verince KESINLIKLE su formati kullan:
+2. NEW PROJECT FROM SCRATCH OR MAJOR ARCHITECTURAL REFACTOR (Pipeline):
+   - If a new project is being built from scratch or there is a major request rebuilding the whole system:
+   - First present an architectural plan and ask the user for approval ("Does this plan look good, shall we proceed?").
+   - Once the user gives definitive approval, ALWAYS use this exact marker format:
 
 ##PIPELINE_START##
-[Netlestirilmis, tum ekleme ve degisiklikleri iceren tam proje ozeti]
+[Clarified, complete project summary containing all additions and changes]
 ##PIPELINE_END##
 
-KURALLAR:
-- Turkce, sade, net ve profesyonel konus.
-- Kucuk duzeltmelerde gereksiz uzun aciklama yapma, dogrudan kod blogunu uret.
-- Nezaket ve onay iletilerinde (örn: "eyw", "sağol", "teşekkürler", "tamamdır", "eline sağlık"): Projeyi veya testleri tekrar çalıştırma; nezaketle rica ederim de ve yeni bir istek bekle.
+RULES:
+- OUTPUT LANGUAGE (MANDATORY): Always communicate with the user, explain your steps, and present plans in fluent Turkish (Türkçe). Keep all code, variable names, comments inside code files, and markers in English.
+- For minor fixes, avoid lengthy unnecessary explanations and directly produce the code block.
+- Courtesy & Confirmation Messages (e.g. "eyw", "sağol", "teşekkürler", "tamamdır", "eline sağlık"): Do not re-run tests or restart the project; politely acknowledge with "Rica ederim" and wait for a new request.
 """
 
 _CHAT_MODE_RULES = """\
 
-CHAT MODU KURALI:
-- Bu bir terminal REPL sohbetidir. Kullanıcının yazdığı her serbest metni doğrudan yanıtla.
-- Kendiliğinden pipeline başlatma, onay isteme veya ##PIPELINE_START## / ##PIPELINE_END## işaretlerini üretme.
-- Pipeline, kullanıcı açıkça /run komutunu girdiğinde ayrı olarak başlatılır.
+CHAT MODE RULE:
+- This is a terminal REPL conversation. Respond directly to whatever free text the user writes.
+- Do not autonomously start a pipeline, ask for approval, or produce ##PIPELINE_START## / ##PIPELINE_END## markers.
+- The pipeline is started separately when the user explicitly enters the /run command.
 """
 
 
@@ -102,19 +102,19 @@ def _matches(text: str, word_set: set[str]) -> bool:
 
 
 def _build_agent_list() -> str:
-    """Aktif moda ve agent listesine gore sistem promptunu formatla."""
+    """Format system prompt based on active mode and agent list."""
     from settings import settings
     mode = settings.execution_mode
     if mode == "subagent":
         return (
-            "  [DİNAMİK SUBAGENT ORKESTRASYON MODU]\n"
-            "  - Göreve özel alt uzmanlar (architect, developer, tester, debugger, researcher) dinamik oluşturulur.\n"
-            "  - Lider ajan görev dağıtır, alt ajanlar izole bağlamda çalışır ve sonuçlar birleştirilir."
+            "  [DYNAMIC SUBAGENT ORCHESTRATION MODE]\n"
+            "  - Dynamically spawns task-specialized subagents (architect, developer, tester, debugger, researcher).\n"
+            "  - The lead agent delegates tasks, subagents execute in isolated context, and results are synthesized."
         )
     elif mode == "interactive":
         return (
-            "  [İNTERAKTİF SOHBET & CANLI KODLAMA MODU]\n"
-            "  - Doğrudan kullanıcı ile canlı soru-cevap, dosya inceleme ve tekli kodlama modu."
+            "  [INTERACTIVE CHAT & LIVE CODING MODE]\n"
+            "  - Direct live interaction with the user: question-answering, file inspection, and direct single-agent coding."
         )
     try:
         agents = load_agents(enabled_only=True)
@@ -123,7 +123,7 @@ def _build_agent_list() -> str:
             for i, a in enumerate(agents)
         )
     except Exception:
-        return "  (agent listesi yuklenemedi)"
+        return "  (failed to load agent list)"
 
 
 # ─────────────────────────────────────────────
@@ -157,16 +157,16 @@ class CoordinatorAgent:
         if files:
             file_list = "\n".join(f"  - {f}" for f in files[:30])
             if len(files) > 30:
-                file_list += f"\n  - ... ve {len(files)-30} dosya daha"
-            project_ctx_parts.append(f"MEVCUT PROJE DOSYALARI ({len(files)} dosya):\n{file_list}")
+                file_list += f"\n  - ... and {len(files)-30} more files"
+            project_ctx_parts.append(f"CURRENT PROJECT FILES ({len(files)} files):\n{file_list}")
 
         brain_txt = read_brain()
         if brain_txt and "(henüz doldurulmadı)" not in brain_txt:
-            project_ctx_parts.append(f"PROJE HAFIZASI (Brain):\n{brain_txt[:2500]}")
+            project_ctx_parts.append(f"PROJECT MEMORY (Brain):\n{brain_txt[:2500]}")
 
         proj_context_str = "\n\n".join(project_ctx_parts)
         if proj_context_str:
-            proj_context_str = f"=== AKTIF PROJE DURUMU ===\n{proj_context_str}\n"
+            proj_context_str = f"=== ACTIVE PROJECT STATUS ===\n{proj_context_str}\n"
 
         from datetime import datetime
         now = datetime.now()
@@ -385,10 +385,10 @@ class CoordinatorAgent:
             base = longest_msg
             if other_msgs:
                 additions = "\n\n".join(f"- {m}" for m in other_msgs)
-                base += f"\n\n=== KULLANICI EK TALIMATLARI VE GUNCELLEMELER ===\n{additions}"
+                base += f"\n\n=== USER ADDITIONAL INSTRUCTIONS & UPDATES ===\n{additions}"
             
             if last_plan:
-                base += f"\n\n=== ONAYLANAN MIMARI VE PLAN ===\n{last_plan}"
+                base += f"\n\n=== APPROVED ARCHITECTURE & PLAN ===\n{last_plan}"
             
             return base
         return ""

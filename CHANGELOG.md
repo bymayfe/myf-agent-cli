@@ -4,6 +4,16 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.7.0] - 2026-09-20
+
+### 🌐 Sistem Promptlarının İngilizceye Taşınması & Türkçe Çıktı Kuralı
+- **Koordinatör Sistem Promptu ve Mod Şablonları (`coordinator_agent.py`):**
+  - Prompt şablonu, agent reach arama altyapı talimatları, mod açıklamaları ve brief başlıkları İngilizceye çevrildi.
+- **Zorunlu Türkçe İletişim (OUTPUT LANGUAGE):**
+  - Modelin kullanıcıya plan sunarken ve adımları açıklarken daima akıcı Türkçe kullanması, kod ve marker'ların İngilizce kalması kuralı eklendi.
+- **Alt Ajan ve Pipeline Rol Şablonları (`subagent_engine.py`, `role_templates.json`):**
+  - Tüm yerleşik alt uzmanlar (`researcher`, `architect`, `developer`, `debugger`, `tester`) ve hazır pipeline rolleri (`product_manager`, `software_architect`, `qa_tester` vb.) için sistem promptları İngilizceye taşındı.
+
 ## [1.6.0] - 2026-09-20
 
 ### 🛡️ Web Sunucusu Güvenliği & Eşzamanlı İstek Desteği
