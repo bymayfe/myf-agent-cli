@@ -426,11 +426,10 @@ def run_pipeline(
 
         # Mevcut hafıza/mimariyi context'e yükle
         from brain import read_brain
-        brain_data = read_brain(output_dir)
+        brain_data = read_brain()
         if brain_data:
-            for b_sec, b_val in brain_data.items():
-                if b_val and b_sec not in context:
-                    context[b_sec] = b_val
+            if "brain" not in context:
+                context["brain"] = brain_data
 
     # ── Başlangıç checkpoint ──────────────────────────────────────────
     _checkpoint_base = {
