@@ -316,6 +316,7 @@ def run_pipeline(
     project_dir: str = None,
     max_retries: int = 3,
     resume_checkpoint: dict = None,
+    start_from_role: str = None,
 ) -> dict:
     """
     5 Aşamalı Pipeline:
@@ -411,6 +412,25 @@ def run_pipeline(
         queue = [a for a in queue if a.role_type not in completed_roles]
         logger.info("[RESUME] Tamamlanan ajanlar atlaniyor: %s", completed_roles)
         logger.info("[RESUME] Devam: %s", [a.role_type for a in queue])
+
+    # ── Belirli bir rolden başlatma (örn: doğrudan QA Test Mühendisi) ─────────
+    if start_from_role:
+        target_idx = next((i for i, a in enumerate(queue) if a.role_type == start_from_role), None)
+        if target_idx is not None and target_idx > 0:
+            skipped = queue[:target_idx]
+            queue = queue[target_idx:]
+            for sk in skipped:
+                if sk.role_type not in completed_roles:
+                    completed_roles.append(sk.role_type)
+            logger.info("[START_FROM_ROLE] '%s' oncesi roller tamamlandi sayildi: %s", start_from_role, [a.role_type for a in skipped])
+
+        # Mevcut hafıza/mimariyi context'e yükle
+        from brain import read_brain
+        brain_data = read_brain(output_dir)
+        if brain_data:
+            for b_sec, b_val in brain_data.items():
+                if b_val and b_sec not in context:
+                    context[b_sec] = b_val
 
     # ── Başlangıç checkpoint ──────────────────────────────────────────
     _checkpoint_base = {

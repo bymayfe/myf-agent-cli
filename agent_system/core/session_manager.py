@@ -33,6 +33,55 @@ def _slugify(text: str, max_len: int = 30) -> str:
     return clean[:max_len] or "proje"
 
 
+def extract_smart_title_and_slug(text: str) -> tuple[str, str]:
+    """
+    Kullanıcı promptundan veya plan metninden akıllı, şık bir başlık ve slug çıkarır.
+    Örn: 'React Native ve Expo kullanarak "Dijital Tesbih & Zikirmatik" uygulaması geliştir'
+         -> ('Dijital Tesbih & Zikirmatik', 'dijital_tesbih_zikirmatik')
+    """
+    if not text or not text.strip():
+        return "Yeni Proje", "yeni_proje"
+
+    raw = text.strip()
+
+    # 1. Tırnak içindeki proje ismi (Türkçe/İngilizce çift tırnak veya tek tırnak)
+    quote_matches = re.findall(r'["\']([^"\']{3,40})["\']', raw)
+    for qm in quote_matches:
+        qm_clean = qm.strip()
+        if not re.search(r'[{}\[\]();<>=]|(?:\b(?:import|export|from|npm|npx|cd|git|pip)\b)', qm_clean, re.I):
+            if len(qm_clean.split()) <= 6:
+                return qm_clean, _slugify(qm_clean)
+
+    # 2. Kalıp Taraması (Doğal Dil Örüntüleri)
+    patterns = [
+        r'(?:(?:bir|şu|yeni)\s+)?([A-Za-zÇĞİÖŞÜçğıöşü0-9\s&-]{3,35})\s+(?:uygulaması|uygulamasi|projesi|servisi|api|backend|frontend|sistemi|botu|aracı|araci)\b',
+        r'(?:ile|kullanarak)\s+([A-Za-zÇĞİÖŞÜçğıöşü0-9\s&-]{3,30})\s+(?:geliştir|yap|yaz|oluştur|inşa et)\b',
+        r'([A-Za-zÇĞİÖŞÜçğıöşü0-9\s&-]{3,30})\s+(?:geliştir|yap|yaz|oluştur)\b',
+    ]
+    for pat in patterns:
+        m = re.search(pat, raw, re.IGNORECASE)
+        if m:
+            cand = m.group(1).strip()
+            cand = re.sub(r'^(?:bir|yeni|modern|ergonomik|hızlı|basit|kullanarak|ile)\s+', '', cand, flags=re.I).strip()
+            if 3 <= len(cand) <= 40 and len(cand.split()) <= 5:
+                return cand.title(), _slugify(cand)
+
+    # 3. İlk anlamlı satırdan temizleyerek üret
+    first_line = raw.splitlines()[0].strip()
+    first_line = re.sub(r'^[#*->\s]+', '', first_line).strip()
+    first_line = re.sub(r'^(?:selam|merhaba|hey|lütfen|bana|şöyle bir|bir)\s+', '', first_line, flags=re.I).strip()
+
+    words = first_line.split()[:5]
+    if words:
+        cand = " ".join(words)
+        if len(cand) > 35:
+            cand = cand[:35].rsplit(" ", 1)[0]
+        if cand:
+            return cand.title(), _slugify(cand)
+
+    return "Yeni Proje", "yeni_proje"
+
+
 class Session:
     """Tek bir oturumu ve projesini temsil eden sınıf."""
 
@@ -156,10 +205,13 @@ class Session:
                 pass
         return True
 
-    def set_title(self, title: str) -> None:
+    def set_title(self, title: str, slug: Optional[str] = None) -> None:
         """Proje basligini ve slug'ini guncelle, gerekirse klasor adini yeniden adlandir."""
-        self.title = title
-        new_slug   = _slugify(title)
+        if not title or title.strip() in ("Yeni Oturum", "Yeni Proje", "yeni_proje"):
+            return
+
+        self.title = title.strip()
+        new_slug   = slug or _slugify(self.title)
 
         if "yeni_proje" in self.folder_name or self.folder_name.endswith("_proje"):
             time_prefix = self.folder_name.split("_")[0] if "_" in self.folder_name else datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -174,8 +226,8 @@ class Session:
                     self.project_dir.rename(new_project_dir)
                     self.folder_name = new_folder_name
                     self.project_dir = new_project_dir
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("Klasor yeniden adlandirilirken hata: %s", exc)
             else:
                 self.folder_name = new_folder_name
                 self.project_dir = new_project_dir
@@ -321,11 +373,74 @@ class SessionManager:
                     pass
                 continue
 
+            # Oturum veya legacy proje için akıllı başlık tespiti
+            auto_title = None
+            if session_obj and (session_obj.title in ("Yeni Oturum", "Yeni Proje") or "yeni_proje" in session_obj.title):
+                # 1. Sohbet geçmişindeki ilk kullanıcı isteğini tara
+                for m in session_obj.conversation_history:
+                    if m.get("role") == "user" and m.get("content"):
+                        u_content = m["content"].strip()
+                        if u_content.lower() not in ("selam", "merhaba", "/run", "/start", "evet", "başla", "onay", "ok"):
+                            t, _ = extract_smart_title_and_slug(u_content)
+                            if t and t not in ("Yeni Proje", "Yeni Oturum"):
+                                auto_title = t
+                                break
+
+            # 2. Dosyalardan tespit (package.json / README.md / .agent_brain.md)
+            if not auto_title and (not session_obj or session_obj.title in ("Yeni Oturum", "Yeni Proje") or "yeni_proje" in item.name):
+                pkg_f = item / "package.json"
+                if pkg_f.exists():
+                    try:
+                        pkg_data = json.loads(pkg_f.read_text(encoding="utf-8", errors="ignore"))
+                        p_name = pkg_data.get("name")
+                        if p_name and p_name not in ("test-app", "my-app"):
+                            auto_title = p_name.replace("-", " ").replace("_", " ").title()
+                    except Exception:
+                        pass
+
+                if not auto_title:
+                    readme_f = item / "README.md"
+                    if readme_f.exists():
+                        try:
+                            for rline in readme_f.read_text(encoding="utf-8", errors="ignore").splitlines():
+                                rline = rline.strip()
+                                if rline.startswith("# ") and len(rline) > 2:
+                                    cand_readme = rline.lstrip("# ").strip()
+                                    if cand_readme and cand_readme.lower() not in ("yeni proje", "readme"):
+                                        auto_title = cand_readme[:30]
+                                        break
+                        except Exception:
+                            pass
+
+                if not auto_title:
+                    brain_f = item / ".agent_brain.md"
+                    if brain_f.exists():
+                        try:
+                            for bline in brain_f.read_text(encoding="utf-8", errors="ignore").splitlines():
+                                bline = bline.strip()
+                                if "proje:" in bline.lower() or "proje özeti:" in bline.lower():
+                                    cand_brain = re.sub(r'^[#*\-:\s]+', '', bline).strip()
+                                    if cand_brain and len(cand_brain) > 3:
+                                        auto_title = cand_brain[:30]
+                                        break
+                        except Exception:
+                            pass
+
+            if auto_title:
+                if session_obj:
+                    session_obj.title = auto_title
+                    try:
+                        session_obj.save()
+                    except Exception:
+                        pass
+
+            final_title = (session_obj.title if session_obj else auto_title) or item.name
+
             if session_obj and (file_count > 0 or msg_count > 0):
                 mtime_dt = datetime.fromisoformat(session_obj.updated_at)
                 sessions.append({
                     "session_id":   session_obj.session_id,
-                    "title":        session_obj.title,
+                    "title":        final_title,
                     "folder_name":  item.name,
                     "path":         str(item),
                     "file_count":   file_count,
@@ -339,7 +454,7 @@ class SessionManager:
                 mtime_dt = datetime.fromtimestamp(mtime)
                 sessions.append({
                     "session_id":   f"legacy-{item.name[:8]}",
-                    "title":        item.name,
+                    "title":        final_title,
                     "folder_name":  item.name,
                     "path":         str(item),
                     "file_count":   file_count,

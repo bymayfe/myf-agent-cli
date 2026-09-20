@@ -1882,3 +1882,77 @@ def test_architect_planned_files_prefix_normalized():
     # Her iki dosya da diskte var olduğu için missing_files boş olmalı
     assert missing_files == []
 
+
+def test_extract_smart_title_and_slug():
+    """Kullanıcı istek metninden akıllı başlık ve slug çıkarımı."""
+    from session_manager import extract_smart_title_and_slug
+
+    # 1. Tırnak içindeki proje ismi
+    prompt1 = 'React Native ve Expo (TypeScript) kullanarak "Dijital Tesbih & Zikirmatik" uygulaması geliştir.'
+    title1, slug1 = extract_smart_title_and_slug(prompt1)
+    assert title1 == "Dijital Tesbih & Zikirmatik"
+    assert "dijital_tesbih" in slug1
+
+    # 2. Kalıp eşleşmesi (örn: ... uygulaması geliştir)
+    prompt2 = 'Bana modern bir Kripto Takip uygulaması geliştir lütfen'
+    title2, slug2 = extract_smart_title_and_slug(prompt2)
+    assert "Kripto Takip" in title2
+    assert "kripto_takip" in slug2
+
+    # 3. Boş girdi
+    title3, slug3 = extract_smart_title_and_slug("")
+    assert title3 == "Yeni Proje"
+    assert slug3 == "yeni_proje"
+
+
+def test_run_pipeline_start_from_role_skips_prior_agents():
+    """start_from_role='qa_tester' verildiğinde önceki roller kuyruktan atlanmalı."""
+    from unittest.mock import patch, MagicMock
+    from main import run_pipeline
+
+    class FakeAgent:
+        def __init__(self, role, name):
+            self.role_type = role
+            self.id = role
+            self.display_name = name
+            self.model = "test-model"
+            self.system_prompt = "system prompt"
+            self.output_brain_section = "test_section"
+            self.produces_output = "test_output"
+
+    fake_agents = [
+        FakeAgent("product_manager", "PM"),
+        FakeAgent("software_architect", "Mimar"),
+        FakeAgent("developer", "DEV"),
+        FakeAgent("qa_tester", "QA"),
+    ]
+
+    mock_res = {
+        "status": "success",
+        "files_written": [],
+        "elapsed": 0.1,
+    }
+
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        with patch("main.load_agents", return_value=fake_agents), \
+             patch("main.GitGuard"), \
+             patch("main.log_store"), \
+             patch("main.save_checkpoint"), \
+             patch("brain.read_brain", return_value={}), \
+             patch("main.write_brain_section"), \
+             patch("main.list_output_files", return_value=[]), \
+             patch("main.build_repomap", return_value=""), \
+             patch("main.build_agent_prompt", return_value="prompt"), \
+             patch("main.call_llm", return_value="## STATUS: PASSED\nAll good"):
+
+            res = run_pipeline(
+                project_brief="Test brief",
+                project_dir=td,
+                start_from_role="qa_tester",
+            )
+            # PM, Mimar, DEV atlandi, sadece QA kosuldu:
+            assert res["agents_run"] == 1
+            assert res["project_dir"] == td
+
+

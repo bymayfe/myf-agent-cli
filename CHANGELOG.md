@@ -4,6 +4,22 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.11.0] - 2026-09-21
+
+### 🏷️ Akıllı Oturum İsimlendirme, Geçmiş Zenginleştirme ve Pipeline QA / Test Doğrulama Yönlendirmesi
+- **İlk İstekten Otomatik Akıllı Başlık ve Slug Çıkarımı (`session_manager.py`):**
+  - Kullanıcının ilk promptundaki tırnak içi isimler veya proje örüntülerinden (`"... uygulaması geliştir"`, `"... servisi yap"`) temiz bir başlık ve slug üretilir.
+  - `Session.set_title`: Boş klasör adı anında yeni proje adıyla yeniden adlandırılır (`rename`).
+- **Geçmiş Oturum Listesinin Otomatik Zenginleştirilmesi (`list_all_sessions`):**
+  - Başlığı `Yeni Oturum` veya `yeni_proje` olan eski oturumlar ve legacy klasörler; `session.json` içindeki ilk kullanıcı isteği, `package.json` (`"name"`), `README.md` (ilk `# Başlık`) ve `.agent_brain.md` taranarak otomatik olarak gerçek proje adıyla listelenir ve `session.json` güncellenir.
+- **Pipeline Girişinde Akıllı Başlık Güncelleme (`chat.py`):**
+  - Pipeline başlangıcında PM ve koordinatörün oluşturduğu proje brief'i üzerinden daha rafine bir başlık belirlenir ve `[Enter = Varsayilan: ...]` önerisi doğru proje klasörünü sunar.
+- **Sohbette Canlı Test & Pipeline QA Adımına Yönlendirme:**
+  - Kullanıcı sohbet esnasında "çalışıp çalışmadığını kontrol et", "test et", "hata var mı", "durum ne" yazdığında veya `/test`, `/verify` komutunu kullandığında:
+    - Aktif dizinde çalıştırılabilir kod olup olmadığı denetlenir; boş klasörlerde açıklayıcı yönlendirme yapılır.
+    - Çalıştırılabilir kod varsa `run_code_verification_tests` ile fiziksel testler koşulur.
+    - Sistem **Pipeline Modunda (Sequential)** ise `main.py` içindeki `start_from_role="qa_tester"` özelliği devreye girerek doğrudan QA Test Mühendisi (ve gerekirse Onarım / Reviewer) adımını başlatır.
+
 ## [1.10.0] - 2026-09-21
 
 ### 🎯 Proje Türüne Göre Akıllı Test Başlatıcı (Language-Aware Test Runner), Pytest Hata Önleme ve Mimari Yol Normalizasyonu

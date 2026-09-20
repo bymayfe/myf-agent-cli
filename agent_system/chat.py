@@ -81,7 +81,7 @@ from config            import (print_config, list_providers,
 from coordinator_agent import CoordinatorAgent
 from agents            import load_agents
 from brain             import list_output_files
-from session_manager   import session_manager
+from session_manager   import session_manager, extract_smart_title_and_slug
 from reach_engine      import reach_engine
 from codebase_graph    import codebase_graph
 from command_registry  import CommandRegistry
@@ -365,7 +365,7 @@ class CommandHub:
             "/reset", "/status", "/dir", "/open", "/resume", "/sessions", "/history",
             "/continue", "/devam", "/purge", "/config", "/logs", "/quota", "/limits",
             "/bakiye", "/ui", "/checkpoints", "/commits", "/rollback", "/revert",
-            "/changes", "/apply", "/discard"
+            "/changes", "/apply", "/discard", "/test", "/verify"
         }
         if first_word in valid_cmds or first_word in ("exit", "quit"):
             return True
@@ -438,6 +438,8 @@ class CommandHub:
             "/commits":    self._checkpoints_cmd,
             "/rollback":   self._rollback_cmd,
             "/revert":     self._rollback_cmd,
+            "/test":       self._test_cmd,
+            "/verify":     self._test_cmd,
         }.get(cmd, self._unknown)(arg)
 
     # ── Komutlar ──────────────────────────────────────────
@@ -1251,6 +1253,45 @@ class CommandHub:
         else:
             ui.error("Gecersiz secim.")
 
+    def _test_cmd(self, _):
+        """Aktif projenin testlerini calistir, pipeline modundaysa QA adimini baslat."""
+        curr_sess = session_manager.current_session
+        from test_runner import run_code_verification_tests
+        from brain import list_output_files
+
+        target_p = curr_sess.project_dir
+        files = list_output_files()
+        src_files = [
+            f for f in files
+            if not f.endswith(".md") and not f.endswith(".txt") and not f.startswith(".")
+            and "temp_codes" not in f
+        ]
+
+        print()
+        ChatUI.system(f"🔍 Aktif proje taranıyor: {curr_sess.title} ({target_p.name})")
+
+        if not src_files:
+            ChatUI.warning(f"Aktif klasörde ({target_p.name}) henüz çalıştırılabilir kaynak kod dosyası bulunmuyor ({len(files)} dosya mevcut).")
+            ChatUI.info("  ↳ Doğru projeyi seçmek için: /resume (Örn: Dijital Tesbih & Zikirmatik)")
+            ChatUI.info("  ↳ Bu klasörde yeni kod üretmek için: /run")
+            return
+
+        ChatUI.system(f"⚡ Fiziksel kod doğrulama ve testler başlatılıyor ({len(src_files)} kaynak dosya)...")
+        test_res = run_code_verification_tests(str(target_p))
+        lang = test_res.get("language", "bilinmeyen")
+
+        if test_res.get("error"):
+            ChatUI.error(f"Test/Derleme Hatası Bulundu ({lang}):\n{test_res['error']}")
+        else:
+            ChatUI.success(f"Sentaks ve Derleme Başarılı! ({lang.upper()} - {len(src_files)} dosya doğrulandı)")
+            if test_res.get("output"):
+                print(f"  {test_res['output'][:300]}")
+
+        if settings.execution_mode == "sequential":
+            print()
+            ChatUI.system("🎯 Pipeline Modu aktif — Doğrudan QA / Test Mühendisi (ve gerekirse Onarım) aşamasına geçiliyor...")
+            self.session._run_pipeline(start_from_role="qa_tester")
+
     def _purge_sessions(self, _):
         """Tüm oturumları ve projeleri disken temizle."""
         ui = ChatUI
@@ -1659,6 +1700,61 @@ class ChatSession:
             if self.cmds.is_command(user_input):
                 self.cmds.dispatch(user_input)
                 continue
+
+            curr_sess = session_manager.current_session
+
+            # 1. İlk anlamlı kullanıcı mesajında otomatik başlık ve slug ata
+            if curr_sess and (curr_sess.title in ("Yeni Oturum", "Yeni Proje") or "yeni_proje" in curr_sess.folder_name):
+                u_clean = user_input.strip()
+                if len(u_clean) > 3 and u_clean.lower() not in ("selam", "merhaba", "hey", "test", "/run", "evet", "başla", "onay", "ok"):
+                    smart_title, smart_slug = extract_smart_title_and_slug(u_clean)
+                    if smart_title and smart_title not in ("Yeni Proje", "Yeni Oturum"):
+                        curr_sess.set_title(smart_title, smart_slug)
+                        self.ui.system(f"🏷️ Proje adı belirlendi: '{smart_title}' (Klasör: {curr_sess.folder_name})")
+
+            # 2. Doğal Dil Test / Kontrol Niyeti Algılama ("çalışıp çalışmadığını kontrol et", "test et" vb.)
+            is_test_intent = bool(re.search(
+                r'(?:çalışıp\s+çalışmadığını|calisip\s+calismadigini|çalışıyor\s*mu|calisiyor\s*mu|kontrol\s+et|test\s+et|testleri\s+çalıştır|testleri\s+calistir|hata\s+var\s*mı|hata\s+var\s*mi|test\s+koş|test\s+kos)\b',
+                user_input, re.IGNORECASE
+            ))
+            if is_test_intent:
+                from test_runner import run_code_verification_tests
+                from brain import list_output_files
+
+                target_p = curr_sess.project_dir
+                files = list_output_files()
+                src_files = [
+                    f for f in files
+                    if not f.endswith(".md") and not f.endswith(".txt") and not f.startswith(".")
+                    and "temp_codes" not in f
+                ]
+
+                print()
+                self.ui.system(f"🔍 Aktif proje taranıyor: {curr_sess.title} ({target_p.name})")
+
+                if not src_files:
+                    self.ui.warning(f"Aktif klasörde ({target_p.name}) henüz çalıştırılabilir kaynak kod dosyası bulunmuyor ({len(files)} dosya mevcut).")
+                    self.ui.info("  ↳ Doğru projeyi seçmek için: /resume (Örn: Dijital Tesbih & Zikirmatik)")
+                    self.ui.info("  ↳ Bu klasörde yeni kod üretmek için: /run")
+                    continue
+
+                self.ui.system(f"⚡ Fiziksel kod doğrulama ve testler başlatılıyor ({len(src_files)} kaynak dosya)...")
+                test_res = run_code_verification_tests(str(target_p))
+                lang = test_res.get("language", "bilinmeyen")
+
+                if test_res.get("error"):
+                    self.ui.error(f"Test/Derleme Hatası Bulundu ({lang}):\n{test_res['error']}")
+                else:
+                    self.ui.success(f"Sentaks ve Derleme Başarılı! ({lang.upper()} - {len(src_files)} dosya doğrulandı)")
+                    if test_res.get("output"):
+                        print(f"  {test_res['output'][:300]}")
+
+                # Eğer sistem Pipeline Modunda (Sequential) ise doğrudan QA aşamasını tetikle!
+                if settings.execution_mode == "sequential":
+                    print()
+                    self.ui.system("🎯 Pipeline Modu aktif — Doğrudan QA / Test Mühendisi (ve gerekirse Onarım) aşamasına geçiliyor...")
+                    self._run_pipeline(start_from_role="qa_tester")
+                continue
                 
             # Bir yolun sohbet metninde geçmesi dosya okunması veya proje
             # değiştirilmesi için yeterli değildir. Bunun yerine /attach kullanılır.
@@ -1912,39 +2008,49 @@ class ChatSession:
 
     # ── Pipeline ──────────────────────────────────────────
 
-    def _run_pipeline(self) -> None:
+    def _run_pipeline(self, start_from_role: Optional[str] = None) -> None:
+        curr_sess = session_manager.current_session
+        brief = self.coord.get_project_brief()
+
+        # Pipeline başlangıcında akıllı başlık ve slug güncelleme
+        if curr_sess and (curr_sess.title in ("Yeni Oturum", "Yeni Proje") or "yeni_proje" in curr_sess.folder_name):
+            p_title, p_slug = extract_smart_title_and_slug(brief)
+            if p_title and p_title not in ("Yeni Proje", "Yeni Oturum"):
+                curr_sess.set_title(p_title, p_slug)
+                ChatUI.system(f"🏷️ Proje adı güncellendi: '{p_title}' (Klasör: {curr_sess.folder_name})")
+
         print()
-        confirm = input(ChatUI._c(
-            "  Pipeline baslatiliyor. Emin misiniz? [Enter=evet / h=hayir]: ",
-            Fore.YELLOW
-        )).strip().lower()
+        prompt_txt = "  QA / Test Doğrulama aşaması başlatılıyor. Emin misiniz? [Enter=evet / h=hayir]: " if start_from_role else "  Pipeline baslatiliyor. Emin misiniz? [Enter=evet / h=hayir]: "
+        confirm = input(ChatUI._c(prompt_txt, Fore.YELLOW)).strip().lower()
 
         if confirm in ("h", "hayir", "n", "no"):
             ChatUI.system("Iptal.")
             return
 
-        # Proje kaydedilecek konumu ve klasor adini sor
         ui = ChatUI
         c  = ui._c
-        curr_sess = session_manager.current_session
 
-        # Varsayilan path olarak aktif proje klasorunu sun (auto-attach edilmisse onu gosterir)
-        default_path = curr_sess.project_dir
+        # Eğer QA aşamasından başlatılıyorsa mevcut klasör yolunu doğrudan kullan
+        if start_from_role:
+            target_dir = str(curr_sess.project_dir)
+        else:
+            # Proje kaydedilecek konumu ve klasor adini sor
+            default_path = curr_sess.project_dir
 
-        print(c("\n  📂 PROJE KAYIT KONUMU SECIN", Fore.CYAN, Style.BRIGHT))
-        print(c("  " + "=" * 60, Fore.CYAN))
-        print("  Kodlarin uretilecegi tam klasor yolunu yazin veya klasor surukleyin.")
-        print(f"  [Enter = Varsayilan: {default_path}]")
-        print()
+            print(c("\n  📂 PROJE KAYIT KONUMU SECIN", Fore.CYAN, Style.BRIGHT))
+            print(c("  " + "=" * 60, Fore.CYAN))
+            print("  Kodlarin uretilecegi tam klasor yolunu yazin veya klasor surukleyin.")
+            print(f"  [Enter = Varsayilan: {default_path}]")
+            print()
 
-        raw_location = input(c("  Klasor Yolu / Konum: ", Fore.YELLOW)).strip().strip('"').strip("'")
+            raw_location = input(c("  Klasor Yolu / Konum: ", Fore.YELLOW)).strip().strip('"').strip("'")
 
-        if raw_location:
-            target_path = Path(raw_location).resolve()
-            curr_sess.set_custom_project_dir(target_path)
-            curr_sess.set_title(target_path.name)
+            if raw_location:
+                target_path = Path(raw_location).resolve()
+                curr_sess.set_custom_project_dir(target_path)
+                curr_sess.set_title(target_path.name)
 
-        target_dir = str(curr_sess.project_dir)
+            target_dir = str(curr_sess.project_dir)
 
         # Otonomi Modu (Sınırsız Döngü) Sorusu
         print(c("\n  🔄 OTONOMI SEVIYESI", Fore.CYAN, Style.BRIGHT))
@@ -2038,6 +2144,7 @@ class ChatSession:
                 progress_callback=self.ui.progress,
                 project_dir=target_dir,
                 max_retries=max_retries,
+                start_from_role=start_from_role,
             )
             curr_sess.save(self.coord.history)
 
