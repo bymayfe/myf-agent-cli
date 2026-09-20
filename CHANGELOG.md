@@ -4,6 +4,23 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.9.0] - 2026-09-20
+
+### ⚡ Canlı Streaming (stream=True), Yerel Model Tespiti ve llama.cpp Ayarları
+- **Gerçek Zamanlı Canlı Streaming & Token/Hız Sayacı (`llm_client.py`):**
+  - `call_llm` fonksiyonuna `stream=True` desteği entegre edildi.
+  - İlk token (TTFT) geldiği andan itibaren terminalde tek satırda anlık güncellenen (`\r`) canlı token sayacı ve hız göstergesi eklendi: `[INFO] ⚡ Yerel model üretiyor: {token} token ({tok_s} tok/s - {elapsed}s)...`
+  - İstek bittiğinde tamamlama özeti basılır: `[INFO] ⚡ Yanıt alındı: {token} token ({elapsed}s — {tok_s} tok/s)`.
+  - Ollama REST istemcisi (`call_ollama_chat`) için `on_token` callback'i bağlanarak aynı canlı sayaç aktifleştirildi.
+  - Streaming desteklemeyen sağlayıcılar için otomatik senkron (non-streaming) geri dönüş (fallback) mekanizması eklendi.
+- **Akıllı Yerel / Bulut Sağlayıcı Tespiti (`is_local_endpoint` & `ColdStartWatcher`):**
+  - `localhost`, `127.0.0.1`, `8080`, `11434`, `1234` veya `llama_cpp`, `ollama`, `lm_studio` sağlayıcıları için `is_local_endpoint` tespiti eklendi.
+  - Yerel modellerde yanıltıcı olan "Bulut sağlayıcı kuyruğu yoğun" ve "Cold-Start" mesajları engellendi; yerine `🧠 Yerel model promptu işliyor...` ve `⚡ Yerel model yanıtı üretiyor...` durum bildirimleri getirildi.
+  - `coordinator_agent.py` ve `llm_client.py` içinde TTFT bekleme süresi şeffaf biçimde kapsandı.
+- **llama.cpp Sunucu Yönetimi & Git Entegrasyonu (`llama_server/`):**
+  - Donanım profiline (AMD Ryzen 7 8845HS + NVIDIA RTX 4070 8GB VRAM) göre optimize edilmiş başlatma ve durdurma betikleri (`llama_server_baslat.sh`, `llama_server_durdur.sh`, Windows `.bat` dosyaları, DeepSeek indirme betiği ve detaylı `README.md`) Git reposuna dahil edildi.
+  - Gigabaytlarca yer kaplayan `.gguf` model ağırlıklarının Git'e girmesi engellenirken (`.gitignore`), repo klonlandığında tek komutla yerel AI sunucusunun ayağa kaldırılabilmesi sağlandı.
+
 ## [1.8.0] - 2026-09-20
 
 ### 🛡️ Pipeline Motorları İngilizce Prompt Mimarisi & CLI Sanal Ortam (.venv) Dayanıklılığı

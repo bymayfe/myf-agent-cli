@@ -27,14 +27,31 @@ logger = logging.getLogger(__name__)
 import threading
 
 
+def is_local_endpoint(api_base: str = "", model: str = "") -> bool:
+    """Belirtilen api_base veya model yerel (localhost / llama.cpp / ollama / lm_studio) mi?"""
+    b = (api_base or "").lower()
+    m = (model or "").lower()
+    # Açık bulut sağlayıcıları kesinlikle yerel değildir
+    if any(k in b for k in ("nvidia.com", "openrouter.ai", "moonshot.cn", "deepseek.com", "openai.com", "anthropic.com", "googleapis.com")):
+        return False
+    if any(k in m for k in ("openrouter/", "moonshot/", "anthropic/", "gemini/")):
+        return False
+    return (
+        any(k in b for k in ("localhost", "127.0.0.1", "0.0.0.0", ":8080", ":11434", ":1234"))
+        or any(k in m for k in ("ollama", "llama_cpp", "lm_studio"))
+    )
+
+
 class ColdStartWatcher:
     """
     Bulut API veya yerel model çağrılarında cold start / gecikmeleri
     terminalde şeffaf ve canlı sayaçla gösteren yardımcı bağlam yöneticisi.
     """
-    def __init__(self, model_name: str, threshold: float = 4.0):
+    def __init__(self, model_name: str, threshold: float = 4.0, api_base: str = ""):
         self.model_name = model_name
         self.threshold = threshold
+        self.api_base = api_base
+        self.is_local = is_local_endpoint(api_base, model_name)
         self._stop_event = threading.Event()
         self._thread = None
         self._start_time = 0.0
@@ -54,20 +71,38 @@ class ColdStartWatcher:
             print(f" (Tamamlandı: {elapsed:.1f}s)", flush=True)
 
     def _run(self):
-        intervals = [4, 8, 15, 25, 40, 60]
-        idx = 0
-        while not self._stop_event.is_set():
-            elapsed = int(time.time() - self._start_time)
-            if idx < len(intervals) and elapsed >= intervals[idx]:
-                target = intervals[idx]
-                if target <= 8:
-                    print(f"\n  [INFO] ⏳ Sağlayıcıya bağlanıldı, yanıt bekleniyor ({elapsed}s)...", end="", flush=True)
-                elif target <= 20:
-                    print(f"\n  [INFO] 🚀 Model uyandırılıyor (Cold-Start / Kuyruk bekleniyor - {elapsed}s)...", end="", flush=True)
-                else:
-                    print(f"\n  [INFO] ⏳ Bulut sağlayıcı kuyruğu yoğun ({elapsed}s), lütfen bekleyin...", end="", flush=True)
-                idx += 1
-            time.sleep(0.5)
+        if self.is_local:
+            # Yerel model (llama.cpp, Ollama, LM Studio)
+            # Yerel modellerde bulut kuyruğu veya cold-start olmaz.
+            # İlk saniyeler prompt evaluation (prefill), sonrasında yanıt üretimi gerçekleşir.
+            local_intervals = [3, 8, 15, 25, 40, 60, 90, 120, 150, 180, 240, 300]
+            idx = 0
+            while not self._stop_event.is_set():
+                elapsed = int(time.time() - self._start_time)
+                if idx < len(local_intervals) and elapsed >= local_intervals[idx]:
+                    target = local_intervals[idx]
+                    if target <= 4:
+                        print(f"\n  [INFO] 🧠 Yerel model promptu işliyor ({elapsed}s)...", end="", flush=True)
+                    else:
+                        print(f"\n  [INFO] ⚡ Yerel model yanıtı üretiyor ({elapsed}s)...", end="", flush=True)
+                    idx += 1
+                time.sleep(0.5)
+        else:
+            # Bulut sağlayıcı (OpenRouter, NVIDIA, Kimi vb.)
+            intervals = [4, 8, 15, 25, 40, 60, 90]
+            idx = 0
+            while not self._stop_event.is_set():
+                elapsed = int(time.time() - self._start_time)
+                if idx < len(intervals) and elapsed >= intervals[idx]:
+                    target = intervals[idx]
+                    if target <= 8:
+                        print(f"\n  [INFO] ⏳ Sağlayıcıya bağlanıldı, yanıt bekleniyor ({elapsed}s)...", end="", flush=True)
+                    elif target <= 20:
+                        print(f"\n  [INFO] 🚀 Model uyandırılıyor (Cold-Start / Kuyruk bekleniyor - {elapsed}s)...", end="", flush=True)
+                    else:
+                        print(f"\n  [INFO] ⏳ Bulut sağlayıcı kuyruğu yoğun ({elapsed}s), lütfen bekleyin...", end="", flush=True)
+                    idx += 1
+                time.sleep(0.5)
 
 
 
@@ -297,28 +332,53 @@ def call_llm(
                 else:
                     print(f"  [{agent_name}] LLM cagrisi yapiliyor... (deneme {attempt}/{max_retries})")
 
+                api_base = LLM_PARAMS.get("api_base", "")
+                is_local = is_local_endpoint(api_base, current_model)
+
                 # Ollama provider ise doğrudan Ollama REST client kullan (sıfır hata)
-                if is_ollama_provider(current_model, LLM_PARAMS.get("api_base", "")):
-                    content = call_ollama_chat(
-                        messages=messages,
-                        model=current_model,
-                        api_base=LLM_PARAMS.get("api_base", "http://localhost:11434"),
-                        stream=False,
-                        think_mode=False,
-                        temperature=LLM_PARAMS["temperature"],
-                        max_tokens=LLM_PARAMS["max_tokens"],
-                        num_ctx=ctx_window,
-                        top_p=LLM_PARAMS.get("top_p"),
-                        top_k=LLM_PARAMS.get("top_k"),
-                    )
+                if is_ollama_provider(current_model, api_base):
+                    ollama_token_count = 0
+                    t_ollama_start = time.time()
+                    last_ollama_update = [0.0]
+
+                    def _ollama_on_token(token: str, token_type: str):
+                        nonlocal ollama_token_count
+                        if token_type == "content" and token:
+                            ollama_token_count += 1
+                            now = time.time()
+                            if now - last_ollama_update[0] >= 0.3:
+                                last_ollama_update[0] = now
+                                elapsed = now - t_ollama_start
+                                tok_s = ollama_token_count / elapsed if elapsed > 0 else 0
+                                print(f"\r  [INFO] ⚡ Yerel model üretiyor: {ollama_token_count} token ({tok_s:.1f} tok/s - {elapsed:.1f}s)...  ", end="", flush=True)
+
+                    with ColdStartWatcher(current_model, api_base=api_base):
+                        content = call_ollama_chat(
+                            messages=messages,
+                            model=current_model,
+                            api_base=api_base or "http://localhost:11434",
+                            stream=True,
+                            on_token=_ollama_on_token,
+                            think_mode=False,
+                            temperature=LLM_PARAMS["temperature"],
+                            max_tokens=LLM_PARAMS["max_tokens"],
+                            num_ctx=ctx_window,
+                            top_p=LLM_PARAMS.get("top_p"),
+                            top_k=LLM_PARAMS.get("top_k"),
+                        )
+                    if ollama_token_count > 0:
+                        elapsed_total = time.time() - t_ollama_start
+                        tok_s_total = ollama_token_count / elapsed_total if elapsed_total > 0 else 0
+                        print(f"\r  [INFO] ⚡ Yanıt alındı: {ollama_token_count} token ({elapsed_total:.1f}s — {tok_s_total:.1f} tok/s)                                \n", end="", flush=True)
                 else:
                     completion_kwargs = {
                         "model": current_model,
                         "messages": messages,
                         "temperature": LLM_PARAMS["temperature"],
                         "max_tokens": LLM_PARAMS["max_tokens"],
-                        "api_base": LLM_PARAMS["api_base"],
-                        "api_key": LLM_PARAMS["api_key"],
+                        "api_base": api_base,
+                        "api_key": LLM_PARAMS.get("api_key", ""),
+                        "stream": True,
                     }
                     if "top_p" in LLM_PARAMS and LLM_PARAMS["top_p"] is not None:
                         completion_kwargs["top_p"] = LLM_PARAMS["top_p"]
@@ -330,9 +390,57 @@ def call_llm(
                             "reasoning_budget": min(LLM_PARAMS["max_tokens"], 16384),
                         }
 
-                    with ColdStartWatcher(current_model):
-                        response = completion(**completion_kwargs)
-                    content = response.choices[0].message.content
+                    # Canlı Streaming ve TTFT / Token / Hız Sayacı
+                    try:
+                        t_stream_start = time.time()
+                        chunks = []
+                        token_count = 0
+                        last_update = 0.0
+
+                        with ColdStartWatcher(current_model, api_base=api_base):
+                            response = completion(**completion_kwargs)
+                            resp_iter = iter(response)
+                            first_chunk = next(resp_iter, None)
+
+                        if first_chunk:
+                            d = (
+                                first_chunk.choices[0].delta.content
+                                if (first_chunk.choices and hasattr(first_chunk.choices[0], "delta") and getattr(first_chunk.choices[0].delta, "content", None))
+                                else ""
+                            )
+                            if d:
+                                chunks.append(d)
+                                token_count += 1
+
+                        model_label = "Yerel model" if is_local else "Model"
+
+                        for chunk in resp_iter:
+                            delta = chunk.choices[0].delta if chunk.choices and hasattr(chunk.choices[0], "delta") else None
+                            if delta:
+                                token = getattr(delta, "content", "") or ""
+                                if token:
+                                    chunks.append(token)
+                                    token_count += 1
+                                    now = time.time()
+                                    if now - last_update >= 0.3:
+                                        last_update = now
+                                        elapsed = now - t_stream_start
+                                        tok_s = token_count / elapsed if elapsed > 0 else 0
+                                        print(f"\r  [INFO] ⚡ {model_label} üretiyor: {token_count} token ({tok_s:.1f} tok/s - {elapsed:.1f}s)...  ", end="", flush=True)
+
+                        elapsed_total = time.time() - t_stream_start
+                        tok_s_total = token_count / elapsed_total if elapsed_total > 0 else 0
+                        if token_count > 0:
+                            print(f"\r  [INFO] ⚡ Yanıt alındı: {token_count} token ({elapsed_total:.1f}s — {tok_s_total:.1f} tok/s)                                \n", end="", flush=True)
+
+                        content = "".join(chunks)
+
+                    except Exception as stream_err:
+                        logger.warning("[%s] Streaming hatası (%s), senkron denenecek: %s", agent_name, current_model, stream_err)
+                        completion_kwargs["stream"] = False
+                        with ColdStartWatcher(current_model, api_base=api_base):
+                            response = completion(**completion_kwargs)
+                        content = response.choices[0].message.content
 
                 print(f"  [{agent_name}] Yanit alindi.")
 

@@ -300,12 +300,16 @@ class CoordinatorAgent:
                 }
 
             from llm_client import ColdStartWatcher
-            with ColdStartWatcher(model):
+            with ColdStartWatcher(model, api_base=LLM_PARAMS.get("api_base", "")):
                 resp = completion(**comp_kwargs)
+                resp_iter = iter(resp)
+                first_chunk = next(resp_iter, None)
+
             full_text = ""
             try:
-                for chunk in resp:
-                    delta = chunk.choices[0].delta if chunk.choices else None
+                def _handle_chunk(chunk):
+                    nonlocal full_text
+                    delta = chunk.choices[0].delta if chunk and chunk.choices else None
                     if delta:
                         reasoning = getattr(delta, "reasoning_content", None) or getattr(delta, "thinking", None)
                         if reasoning and on_token and settings.think_mode:
@@ -316,6 +320,12 @@ class CoordinatorAgent:
                             full_text += token
                             if on_token:
                                 on_token(token, "content")
+
+                if first_chunk:
+                    _handle_chunk(first_chunk)
+
+                for chunk in resp_iter:
+                    _handle_chunk(chunk)
             except KeyboardInterrupt:
                 if on_token:
                     on_token("\n[durduruldu]\n", "content")

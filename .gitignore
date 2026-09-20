@@ -1,5 +1,5 @@
 # ==============================================================================
-# MYF AI Agent CLI (.gitignore)
+# Multi-Agent Sistem (.gitignore)
 # ==============================================================================
 
 # ── Python & Bytecode ────────────────────────────────────────────────────────
@@ -14,24 +14,27 @@ develop-eggs/
 dist/
 downloads/
 eggs/
-.eggs/
-lib/
-lib64/
+/lib/
+/lib64/
+!web_ui/src/lib/
 parts/
 sdist/
 var/
 wheels/
 *.egg-info/
-.installed.cfg
-*.manifest
-*.spec
-
-# ── Large Binaries & Models (>50MB) ──────────────────────────────────────────
+# ── Large Binaries (>100MB) ──────────────────────────────────────────────────
 *.exe
 *.gguf
-*.bin
-*.onnx
-models/
+/models/
+llama_server/models/*
+!llama_server/models/.gitkeep
+!web_ui/src/app/api/models/
+third_party/codebase_memory/codebase-memory-mcp*
+!third_party/codebase_memory/*.ps1
+!third_party/codebase_memory/*.sh
+!third_party/codebase_memory/*.bat
+!third_party/codebase_memory/*.md
+!third_party/codebase_memory/LICENSE
 
 # ── Virtual Environments ──────────────────────────────────────────────────────
 .venv/
@@ -53,21 +56,21 @@ htmlcov/
 
 # ── Environment & Secrets ─────────────────────────────────────────────────────
 .env
-.env.local
-.env.*.local
-*.env
 agent_system/.env
-!*.env.example
+*.env.local
+*.env.*.local
+!agent_system/.env.example
 
 # ── Logs & Databases ──────────────────────────────────────────────────────────
 *.log
-*.sqlite
-*.sqlite3
-*.db
-logs.db
 agent_system.log
 agent_system/agent_system.log
+*.db
+*.sqlite
+*.sqlite3
+logs.db
 .external_sessions.json
+agent_system/projects/.external_sessions.json
 
 # ── Codebase Memory & Graph Cache ─────────────────────────────────────────────
 .codebase-memory/
@@ -75,15 +78,12 @@ agent_system/agent_system.log
 *.zst
 
 # ── Generated Projects & Temporary Workspace ─────────────────────────────────
-output_project/*
-!output_project/.gitkeep
 agent_system/output_project/*
 !agent_system/output_project/.gitkeep
 
-projects/*
-!projects/.gitkeep
 agent_system/projects/*
 !agent_system/projects/.gitkeep
+!agent_system/projects/.current_project
 
 .myfcli/temp_codes/
 **/temp_codes/
@@ -98,3 +98,5 @@ checkpoint.json
 .DS_Store
 Thumbs.db
 Desktop.ini
+*.zip
+.myfcli/
