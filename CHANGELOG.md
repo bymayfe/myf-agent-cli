@@ -4,6 +4,19 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [1.8.0] - 2026-09-20
+
+### 🛡️ Pipeline Motorları İngilizce Prompt Mimarisi & CLI Sanal Ortam (.venv) Dayanıklılığı
+- **Tüm İç Pipeline & Hata Onarım Motorlarının İngilizceye Taşınması (`agent_system`):**
+  - `agents.py`: `_context_label()` ve `_task_hint()` etiket ve talimatları İngilizceye uyarlandı.
+  - `fix_engine.py`: `MicroFixEngine` ve `EscalationEngine` cerrahi onarım promptları İngilizceye çevrildi.
+  - `subagent_engine.py`: Lider Orkestratör planlama ve retry promptları İngilizceye çevrildi.
+  - `profiling_engine.py`: `StuckLoopDetector.HINTS` 4 aşamalı döngü kırma stratejileri İngilizceye taşındı.
+  - `context_budgeter.py`: `[SUMMARIZED CONVERSATION HISTORY]` başlığı uyarlandı ve 74/74 pytest testi başarıyla geçti.
+- **CLI Sanal Ortam (.venv) ve litellm Bağımlılık İyileştirmesi (`chat.py`, `main.py`, `launch.sh`):**
+  - Taşınan dizinler için `.venv` yolları onarıldı; `chat.py` ve `main.py` içerisine `.venv/lib/python*/site-packages` otomatik keşif mekanizması eklendi.
+  - `launch.sh` doğrudan `.venv/bin/python3` üzerinden çalışacak şekilde kilitlendi.
+
 ## [1.7.0] - 2026-09-20
 
 ### 🌐 Sistem Promptlarının İngilizceye Taşınması & Türkçe Çıktı Kuralı
