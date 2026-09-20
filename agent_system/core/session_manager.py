@@ -243,10 +243,21 @@ class Session:
             logger.warning("Geçersiz veya korumalı sistem kök dizini: %s, atlanıyor.", p)
             return self.project_dir
         p.mkdir(parents=True, exist_ok=True)
+        old_dir = self.project_dir
+
         self.project_dir = p
         self.folder_name = p.name
         set_output_dir(str(self.project_dir))
         self.save()
+
+        # Eski geçici dizin boşsa (kod içermiyorsa) arkada hayalet klasör bırakmamak için temizle
+        if old_dir != p and old_dir.exists() and PROJECTS_BASE_DIR in old_dir.parents:
+            if _fast_count_files(old_dir) == 0:
+                try:
+                    shutil.rmtree(old_dir)
+                except Exception:
+                    pass
+
         return self.project_dir
 
     @classmethod
@@ -288,8 +299,9 @@ def _fast_count_files(dir_path: Path) -> int:
         rel_root = os.path.relpath(root, dir_str)
         if ".myfcli" in rel_root and "temp_codes" not in rel_root:
             continue
+        _SYS_FILES = {"CHANGELOG.md", "ajan_sohbet_gunlugu.txt", "AUDIT_LOG.md", "session.json", ".agent_brain.md", ".gitkeep"}
         for f in files:
-            if not f.startswith(".") and f not in {"CHANGELOG.md", "ajan_sohbet_gunlugu.txt"}:
+            if not f.startswith(".") and f not in _SYS_FILES:
                 count += 1
     return count
 
@@ -375,7 +387,7 @@ class SessionManager:
 
             # Oturum veya legacy proje için akıllı başlık tespiti
             auto_title = None
-            if session_obj and (session_obj.title in ("Yeni Oturum", "Yeni Proje") or "yeni_proje" in session_obj.title):
+            if session_obj and (session_obj.title in ("Yeni Oturum", "Yeni Proje", item.name) or "yeni_proje" in session_obj.title or "test" in session_obj.title.lower()):
                 # 1. Sohbet geçmişindeki ilk kullanıcı isteğini tara
                 for m in session_obj.conversation_history:
                     if m.get("role") == "user" and m.get("content"):
@@ -436,8 +448,10 @@ class SessionManager:
 
             final_title = (session_obj.title if session_obj else auto_title) or item.name
 
+            mtime = item.stat().st_mtime
+            mtime_dt = datetime.fromtimestamp(mtime)
+
             if session_obj and (file_count > 0 or msg_count > 0):
-                mtime_dt = datetime.fromisoformat(session_obj.updated_at)
                 sessions.append({
                     "session_id":   session_obj.session_id,
                     "title":        final_title,
@@ -445,7 +459,7 @@ class SessionManager:
                     "path":         str(item),
                     "file_count":   file_count,
                     "msg_count":    msg_count,
-                    "mtime":        mtime_dt.timestamp(),
+                    "mtime":        mtime,
                     "mtime_str":    mtime_dt.strftime("%d.%m.%Y %H:%M"),
                     "session_obj":  session_obj,
                 })
@@ -464,8 +478,37 @@ class SessionManager:
                     "session_obj":  None,
                 })
 
-        sessions.sort(key=lambda x: x["mtime"], reverse=True)
-        return sessions
+        # Session ID ve yola göre tekilleştir; aynı oturumun boş kopyası varsa temizle
+        unique_sessions: list[dict[str, Any]] = []
+        seen_ids: dict[str, dict[str, Any]] = {}
+
+        for s in sessions:
+            sid = s["session_id"]
+            if sid not in seen_ids:
+                seen_ids[sid] = s
+                unique_sessions.append(s)
+            else:
+                existing = seen_ids[sid]
+                # Daha çok dosyası olanı veya harici geçerli projeyi tut
+                if s["file_count"] > existing["file_count"]:
+                    if Path(existing["path"]).exists() and PROJECTS_BASE_DIR in Path(existing["path"]).parents and existing["file_count"] == 0:
+                        try:
+                            shutil.rmtree(existing["path"])
+                        except Exception:
+                            pass
+                    if existing in unique_sessions:
+                        unique_sessions.remove(existing)
+                    seen_ids[sid] = s
+                    unique_sessions.append(s)
+                else:
+                    if Path(s["path"]).exists() and PROJECTS_BASE_DIR in Path(s["path"]).parents and s["file_count"] == 0:
+                        try:
+                            shutil.rmtree(s["path"])
+                        except Exception:
+                            pass
+
+        unique_sessions.sort(key=lambda x: x["mtime"], reverse=True)
+        return unique_sessions
 
     def list_recent(self, limit: int = 10) -> list[dict[str, Any]]:
         """Son aktif oturumları en yeniden eskiye sıralı olarak döndürür."""
