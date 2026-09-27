@@ -21,6 +21,6 @@
   "enable_laya": true,
   "laya_model": "convaiinnovations/laya",
   "laya_device": "cpu",
-  "same_error_loop_breaker_enabled": false,
+  "same_error_loop_breaker_enabled": true,
   "max_same_error_repeats": 5
 }

@@ -57,7 +57,7 @@ PLANNING_MODEL      = _pm   # Planlama (PRD + Mimari)
 ESCALATION_MODEL    = _cm   # Agir kod / Escalation
 MICRO_FIX_MODEL     = _mfm  # Hizli syntax onarimi
 MICRO_FIX_MAX_TRIES = _mft  # kac basarisiz micro-fix sonrasi escalation
-SAME_ERROR_LOOP_BREAKER_ENABLED = False
+SAME_ERROR_LOOP_BREAKER_ENABLED = True
 MAX_SAME_ERROR_REPEATS          = 5
 
 # Default output dir points to projects/ directory

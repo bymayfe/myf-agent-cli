@@ -80,8 +80,8 @@ _DEFAULTS: dict[str, Any] = {
     "laya_device":       "cpu",
 
     # ── Hata Tekrar & Döngü Kırıcı (Loop Breaker) ──
-    # Aynı hata peş peşe tekrarlanırsa döngüyü kır / iptal et (varsayılan: False)
-    "same_error_loop_breaker_enabled": False,
+    # Aynı hata peş peşe tekrarlanırsa döngüyü kır / iptal et (varsayılan: True)
+    "same_error_loop_breaker_enabled": True,
     # Aynı hatanın kaç kez tekrarlanabileceği (varsayılan: 5)
     "max_same_error_repeats":          5,
 }
@@ -454,7 +454,7 @@ class Settings:
 
     @property
     def same_error_loop_breaker_enabled(self) -> bool:
-        return bool(self._data.get("same_error_loop_breaker_enabled", False))
+        return bool(self._data.get("same_error_loop_breaker_enabled", True))
 
     @same_error_loop_breaker_enabled.setter
     def same_error_loop_breaker_enabled(self, value: bool) -> None:

@@ -2012,19 +2012,19 @@ def test_same_error_loop_breaker_settings():
     from settings import settings
 
     # Varsayılan değerler
-    assert settings.same_error_loop_breaker_enabled is False
+    assert settings.same_error_loop_breaker_enabled is True
     assert settings.max_same_error_repeats == 5
 
     # Güncelleme
     try:
-        settings.set("same_error_loop_breaker_enabled", "true")
-        assert settings.same_error_loop_breaker_enabled is True
+        settings.set("same_error_loop_breaker_enabled", "false")
+        assert settings.same_error_loop_breaker_enabled is False
 
         settings.set("max_same_error_repeats", "8")
         assert settings.max_same_error_repeats == 8
     finally:
-        # Geri al (varsayılan: False ve 5)
-        settings.same_error_loop_breaker_enabled = False
+        # Geri al (varsayılan: True ve 5)
+        settings.same_error_loop_breaker_enabled = True
         settings.max_same_error_repeats = 5
 
 
