@@ -59,7 +59,12 @@ def compute_error_signature(error_log: str) -> str:
     normalized = re.sub(r"\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?", "TIMESTAMP", normalized)
     # 3. Yollardaki geçici klasör isimlerini (/tmp/pytest-xxx/) normalize et
     normalized = re.sub(r"/tmp/[^/\s]+", "/tmp/DIR", normalized)
-    # 4. Fazla boşlukları sadeleştir
+    # 4. Pytest ve terminal yürütme sürelerini ve yüzdelerini normalize et (in 0.20s, 1.45s vb.)
+    normalized = re.sub(r"\bin \d+(?:\.\d+)?s\b", "in DURATION", normalized)
+    normalized = re.sub(r"\b\d+(?:\.\d+)?s\b", "DURATION", normalized)
+    normalized = re.sub(r"\b\d+(?:\.\d+)?ms\b", "DURATION", normalized)
+    normalized = re.sub(r"\[\s*\d+%\s*\]", "[PERCENT]", normalized)
+    # 5. Fazla boşlukları sadeleştir
     normalized = "\n".join(line.strip() for line in normalized.splitlines() if line.strip())
 
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()

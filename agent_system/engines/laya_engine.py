@@ -672,8 +672,26 @@ class LayaDecisionEngine:
             history_note=f"Bu hata döngüde {retry_count}. kez tekrarlanıyor.",
         )
         target_file = pinpoint.get("file", "")
+        is_target_test = bool(target_file and ("test" in target_file.lower()))
 
-        # Kod dosyalarından sadece hedef dosya ve test bloğunu ayıkla
+        # Eger hata veren dosya bir test dosyasi ise, test edilen asil uygulama dosyasini da tespit et
+        tested_app_files = []
+        if is_target_test:
+            stem = Path(target_file).stem
+            # test_services -> services, test_note_service -> note_service, test_models -> models
+            mod_target = re.sub(r"^test[s]?_", "", stem)
+            if project_dir and isinstance(project_dir, (str, Path)):
+                p_dir = Path(project_dir)
+                for cand in p_dir.rglob(f"*{mod_target}*.py"):
+                    if not any(part.startswith(".") for part in cand.parts) and "test" not in cand.name.lower():
+                        try:
+                            rel_cand = str(cand.relative_to(p_dir)).replace("\\", "/")
+                            if rel_cand not in tested_app_files:
+                                tested_app_files.append(rel_cand)
+                        except Exception:
+                            pass
+
+        # Kod dosyalarından hedef dosya, test edilen uygulama modülü ve test bloğunu ayıkla
         focused_code_blocks = []
         try:
             from engines.code_parser import CodeParser
@@ -682,9 +700,16 @@ class LayaDecisionEngine:
                 for blk in parsed:
                     p = blk.path.lower()
                     fname = Path(target_file).name.lower() if target_file else ""
+                    is_match = False
                     if fname and (fname in p or p.endswith(fname)):
+                        is_match = True
+                    for app_f in tested_app_files:
+                        if Path(app_f).name.lower() in p or p.endswith(Path(app_f).name.lower()):
+                            is_match = True
+                            break
+                    if is_match:
                         focused_code_blocks.append(f"# filepath: {blk.path}\n{blk.content}")
-                    elif "test" in p:
+                    elif "test" in p and len(focused_code_blocks) < 4:
                         focused_code_blocks.append(f"# filepath: {blk.path}\n{blk.content[:1500]}")
         except Exception:
             pass
@@ -697,10 +722,25 @@ class LayaDecisionEngine:
                     body = blocks[i+1] if i+1 < len(blocks) else ""
                     combined = f"{header}\n{body}"
                     fname = Path(target_file).name.lower()
-                    if fname in header.lower() or "test" in header.lower():
+                    is_m = fname in header.lower() or "test" in header.lower()
+                    for app_f in tested_app_files:
+                        if Path(app_f).name.lower() in header.lower():
+                            is_m = True
+                            break
+                    if is_m:
                         focused_code_blocks.append(combined[:3000])
 
         pruned_code = "\n\n".join(focused_code_blocks) if focused_code_blocks else full_code_files[:4000]
+
+        diagnostic_card = pinpoint['diagnostic_card']
+        if is_target_test:
+            app_hint = f" (Örn: {', '.join(tested_app_files)})" if tested_app_files else ""
+            diagnostic_card += (
+                f"\n⚠️ DİKKAT (TEST BAŞARISIZLIĞI): Hata test dosyasında ({target_file}) tetiklendi.\n"
+                f"Test dosyasını bozmaya veya test beklentilerini silmeye ÇALIŞMAYIN! "
+                f"Hatanın asıl kök nedeni, test edilen uygulama modülündedir{app_hint}. "
+                f"Lütfen ilgili uygulama dosyasındaki boş stub'ları (`pass`) kaldırıp fonksiyonların gerçek veritabanı/servis implementasyonunu yazın!\n"
+            )
 
         intervention = ""
         if retry_count >= 2:
@@ -712,7 +752,7 @@ class LayaDecisionEngine:
 
         return (
             f"{intervention}"
-            f"{pinpoint['diagnostic_card']}\n\n"
+            f"{diagnostic_card}\n\n"
             f"=== ODAKLANMIŞ KOD BAĞLAMI (Düzeltilecek Dosyalar) ===\n"
             f"{pruned_code}\n"
         )
