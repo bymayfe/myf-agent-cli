@@ -78,6 +78,12 @@ _DEFAULTS: dict[str, Any] = {
     "enable_laya":       True,
     "laya_model":        "convaiinnovations/laya",
     "laya_device":       "cpu",
+
+    # ── Hata Tekrar & Döngü Kırıcı (Loop Breaker) ──
+    # Aynı hata peş peşe tekrarlanırsa döngüyü kır / iptal et (varsayılan: False)
+    "same_error_loop_breaker_enabled": False,
+    # Aynı hatanın kaç kez tekrarlanabileceği (varsayılan: 5)
+    "max_same_error_repeats":          5,
 }
 
 
@@ -442,6 +448,26 @@ class Settings:
     @laya_device.setter
     def laya_device(self, value: str) -> None:
         self._data["laya_device"] = str(value).strip().lower()
+        self.save()
+
+    # ── Hata Tekrar & Döngü Kırıcı Ayarları ─────────────────
+
+    @property
+    def same_error_loop_breaker_enabled(self) -> bool:
+        return bool(self._data.get("same_error_loop_breaker_enabled", False))
+
+    @same_error_loop_breaker_enabled.setter
+    def same_error_loop_breaker_enabled(self, value: bool) -> None:
+        self._data["same_error_loop_breaker_enabled"] = bool(value)
+        self.save()
+
+    @property
+    def max_same_error_repeats(self) -> int:
+        return int(self._data.get("max_same_error_repeats", 5))
+
+    @max_same_error_repeats.setter
+    def max_same_error_repeats(self, value: int) -> None:
+        self._data["max_same_error_repeats"] = max(1, min(50, int(value)))
         self.save()
 
     # ── Yardimci Metodlar ───────────────────────────────────

@@ -57,6 +57,8 @@ PLANNING_MODEL      = _pm   # Planlama (PRD + Mimari)
 ESCALATION_MODEL    = _cm   # Agir kod / Escalation
 MICRO_FIX_MODEL     = _mfm  # Hizli syntax onarimi
 MICRO_FIX_MAX_TRIES = _mft  # kac basarisiz micro-fix sonrasi escalation
+SAME_ERROR_LOOP_BREAKER_ENABLED = False
+MAX_SAME_ERROR_REPEATS          = 5
 
 # Default output dir points to projects/ directory
 _CURRENT_OUTPUT_DIR = str(PROJECTS_BASE_DIR / "Yeni_Proje")
@@ -450,11 +452,18 @@ REPOMAP_TOKENS = int(os.getenv("REPOMAP_TOKENS", "2048"))
 
 def reload_config():
     global PLANNING_MODEL, ESCALATION_MODEL, MICRO_FIX_MODEL, MICRO_FIX_MAX_TRIES
+    global SAME_ERROR_LOOP_BREAKER_ENABLED, MAX_SAME_ERROR_REPEATS
     _pm, _cm, _mfm, _mft, _fac = _get_pipeline_models()
     PLANNING_MODEL      = _pm
     ESCALATION_MODEL    = _cm
     MICRO_FIX_MODEL     = _mfm
     MICRO_FIX_MAX_TRIES = _mft
+    try:
+        from settings import settings as _s
+        SAME_ERROR_LOOP_BREAKER_ENABLED = _s.same_error_loop_breaker_enabled
+        MAX_SAME_ERROR_REPEATS = _s.max_same_error_repeats
+    except Exception:
+        pass
     LLM_PARAMS.clear()
     LLM_PARAMS.update(_get_llm_params())
     AGENT_MODELS.clear()

@@ -409,34 +409,55 @@ class LayaDecisionEngine:
         error_msg = ""
         failing_line = ""
 
-        # 1. Traceback içindeki tüm Python ve Pytest çağrı çerçevelerini topla:
-        #    Python: File "...", line 123
-        #    Pytest: path/to/file.py:123: in func veya path/to/file.py:123:
-        all_py = re.findall(r'File\s+[\'"]([^\'"]+)[\'"],\s+line\s+(\d+)', error_log)
-        all_pytest = re.findall(r'(?:^|\s|\b)([a-zA-Z0-9_\-\./\\]+\.py):(\d+):', error_log)
-        all_matches = all_py + all_pytest
+        # 1. Açık bir sentaks/girinti hatası varsa doğrudan o dosyayı ve satırı yakala:
+        syntax_m = re.search(r'File\s+[\'"]([^\'"]+\.py)[\'"],\s+line\s+(\d+).*?(?:SyntaxError|IndentationError|TabError)', error_log, re.DOTALL)
+        if syntax_m:
+            cand_s = syntax_m.group(1).replace("\\", "/").strip()
+            if not any(sys_dir in cand_s for sys_dir in ("/usr/", "site-packages", ".venv", "lib/python")):
+                file_path = cand_s
+                try:
+                    line_num = int(syntax_m.group(2))
+                except Exception:
+                    line_num = 0
 
-        # Çağrı yığınını en içten (en alttaki hatayı asıl üreten çerçeveden) yukarı doğru tara:
-        for cand_f, cand_l in reversed(all_matches):
-            cand_clean = cand_f.replace("\\", "/").strip()
-            if any(sys_dir in cand_clean for sys_dir in ("/usr/", "site-packages", ".venv", "lib/python")):
-                continue
-            file_path = cand_clean
-            try:
-                line_num = int(cand_l)
-            except Exception:
-                line_num = 0
-            if project_dir and isinstance(project_dir, (str, Path)):
-                p = Path(project_dir)
-                if (p / cand_clean).exists() or list(p.rglob(Path(cand_clean).name)):
-                    break
-            else:
-                break
+        # 2. Çağrı çerçevelerini metin sırasına göre topla:
+        if not file_path:
+            frame_pattern = r'(?:File\s+[\'"](?P<f1>[^\'"]+\.py)[\'"],\s+line\s+(?P<l1>\d+))|(?:(?:^|\s|\b)(?P<f2>[a-zA-Z0-9_\-\./\\]+\.py):(?P<l2>\d+):)'
+            frame_matches = []
+            for m in re.finditer(frame_pattern, error_log):
+                cand_f = (m.group('f1') or m.group('f2') or '').replace("\\", "/").strip()
+                cand_l = m.group('l1') or m.group('l2') or '0'
+                if not cand_f or any(sys_dir in cand_f for sys_dir in ("/usr/", "site-packages", ".venv", "lib/python")):
+                    continue
+                try:
+                    l_val = int(cand_l)
+                except Exception:
+                    l_val = 0
+                frame_matches.append((cand_f, l_val))
+
+            # Uygulama kodları ve test kodlarını ayır (uygulama içi hatalara öncelik ver)
+            app_matches = [m for m in frame_matches if not m[0].startswith("tests/") and not Path(m[0]).name.startswith("test_")]
+            chosen = app_matches[-1] if app_matches else (frame_matches[-1] if frame_matches else None)
+
+            if chosen:
+                file_path = chosen[0]
+                line_num = chosen[1]
 
         if not file_path:
             m_collect = re.search(r'ERROR collecting\s+([a-zA-Z0-9_\-\./\\]+\.py)', error_log)
             if m_collect:
                 file_path = m_collect.group(1).replace("\\", "/")
+
+        if file_path and project_dir and isinstance(project_dir, (str, Path)):
+            p_dir = Path(project_dir)
+            try:
+                p_fp = Path(file_path)
+                if p_fp.is_relative_to(p_dir):
+                    file_path = str(p_fp.relative_to(p_dir)).replace("\\", "/")
+                elif str(p_fp).startswith(str(p_dir)):
+                    file_path = str(p_fp)[len(str(p_dir)):].lstrip("/\\").replace("\\", "/")
+            except Exception:
+                pass
 
         # Hata mesajı satırı (Traceback sonundaki TypeError, ImportError, SyntaxError vs.)
         err_lines = [l.strip() for l in error_log.splitlines() if l.strip()]

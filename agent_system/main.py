@@ -53,7 +53,7 @@ from brain import (
 from codebase_graph import build_repomap
 from code_parser import extract_code_blocks, extract_planned_files_from_architecture
 from test_runner import run_code_verification_tests
-from fix_engine import fix_engine, MicroFixEngine, EscalationEngine
+from fix_engine import fix_engine, MicroFixEngine, EscalationEngine, compute_error_signature
 from profiling_engine import ProfilingEngine, StuckLoopDetector
 from agents import (
     load_agents,
@@ -400,6 +400,9 @@ def run_pipeline(
     error_history:   list[str] = []
     stuck_hint_idx:  int = 0
     qa_fail_streak:  int = 0
+    last_error_signature: str = ""
+    consecutive_same_error_count: int = 0
+    total_different_errors_seen: int = 0
 
     _optimizer_agent = next((a for a in agents if a.role_type == "optimizer"), None)
 
@@ -839,7 +842,38 @@ def run_pipeline(
                     is_qa_failed = has_explicit_fail or has_real_crash or (len(missing_files) > 0 and retry_count < 2)
 
                 MAX_QA_RETRIES = 5 if is_full_autonomy else 3
-                can_retry = (retry_count < MAX_QA_RETRIES)
+
+                # ── AYARLANABİLİR: Aynı Hata Tekrarı & Döngü Kırıcı (Loop Breaker) ──
+                same_err_breaker = getattr(settings, "same_error_loop_breaker_enabled", False)
+                max_same_repeats = getattr(settings, "max_same_error_repeats", 5)
+
+                if is_qa_failed:
+                    err_text = context.get("last_test_error", raw)
+                    err_sig = compute_error_signature(err_text)
+
+                    if err_sig == last_error_signature:
+                        consecutive_same_error_count += 1
+                    else:
+                        consecutive_same_error_count = 1
+                        last_error_signature = err_sig
+                        total_different_errors_seen += 1
+
+                    if same_err_breaker:
+                        # Ayar aktifken: Sadece AYNI hata max_same_repeats kez tekrarlanırsa döngü iptal edilir.
+                        # Farklı hataların denenmesi deneme sayısına etki etmez.
+                        is_same_error_limit_exceeded = (consecutive_same_error_count >= max_same_repeats)
+                        can_retry = (not is_same_error_limit_exceeded) and (retry_count < 30)
+                        if is_same_error_limit_exceeded:
+                            logger.warning(
+                                "[LOOP BREAKER] Aynı hata %d kez ardı ardına tekrarlandı! Kısırdöngü iptal ediliyor (error_sig=%s)",
+                                consecutive_same_error_count, err_sig[:8]
+                            )
+                            print(f"\n  🛑 [AYNI HATA DÖNGÜSÜ İPTALİ] Aynı hata {consecutive_same_error_count} kez peş peşe tekrarlandı. Döngü kırıldı, Reviewer'a aktarılıyor.")
+                    else:
+                        # Ayar kapalıyken (varsayılan: False): klasik retry_count mekanizması çalışır
+                        can_retry = (retry_count < MAX_QA_RETRIES)
+                else:
+                    can_retry = False
 
                 if is_qa_failed and can_retry:
                     retry_count += 1

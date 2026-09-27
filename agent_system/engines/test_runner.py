@@ -327,44 +327,76 @@ class CodeVerifier:
                             etype = "runtime"
 
                         # Hatanın meydana geldiği asıl dosyayı yakala:
-                        # 1. Python standart traceback: File "...", line X
-                        # 2. Pytest traceback: path/to/file.py:X: in ... veya path/to/file.py:X:
-                        # 3. Pytest ERROR/FAILED satırı
                         failing_file = str(target_entry.relative_to(out_path)).replace("\\", "/")
 
-                        tb_matches = re.findall(r'File\s+"([^"]+\.py)"', error_out)
-                        pytest_matches = re.findall(r'(?:^|\s|\b)([a-zA-Z0-9_\-\./\\]+\.py):\d+:', error_out)
-                        all_cands = tb_matches + pytest_matches
-
-                        found_inner = False
-                        if all_cands:
-                            for cand_path in reversed(all_cands):
-                                cand_clean = cand_path.replace("\\", "/").strip()
-                                if any(sys_dir in cand_clean for sys_dir in ("/usr/", "site-packages", ".venv", "lib/python")):
-                                    continue
-                                p = Path(cand_clean)
+                        # 1. Açık bir sentaks/girinti hatası varsa doğrudan o dosyayı al:
+                        #    Örn: File ".../app/services/note_service.py", line 13
+                        #         IndentationError: expected an indented block
+                        syntax_m = re.search(r'File\s+[\'"]([^\'"]+\.py)[\'"],\s+line\s+(\d+).*?(?:SyntaxError|IndentationError|TabError)', error_out, re.DOTALL)
+                        found_syntax = False
+                        if syntax_m:
+                            cand_s = syntax_m.group(1).replace("\\", "/").strip()
+                            if not any(sys_dir in cand_s for sys_dir in ("/usr/", "site-packages", ".venv", "lib/python")):
+                                p_s = Path(cand_s)
                                 try:
-                                    if p.is_relative_to(out_path):
-                                        failing_file = str(p.relative_to(out_path)).replace("\\", "/")
-                                        found_inner = True
-                                        break
+                                    if p_s.is_relative_to(out_path):
+                                        failing_file = str(p_s.relative_to(out_path)).replace("\\", "/")
+                                        found_syntax = True
                                 except Exception:
                                     pass
-                                if str(p).startswith(str(out_path)):
-                                    failing_file = str(p)[len(str(out_path)):].lstrip("/\\").replace("\\", "/")
-                                    found_inner = True
-                                    break
-                                if (out_path / cand_clean).exists():
-                                    failing_file = cand_clean
-                                    found_inner = True
-                                    break
+                                if not found_syntax:
+                                    if str(p_s).startswith(str(out_path)):
+                                        failing_file = str(p_s)[len(str(out_path)):].lstrip("/\\").replace("\\", "/")
+                                        found_syntax = True
+                                    elif (out_path / cand_s).exists():
+                                        failing_file = cand_s
+                                        found_syntax = True
+                                    elif list(out_path.rglob(p_s.name)):
+                                        failing_file = str(list(out_path.rglob(p_s.name))[0].relative_to(out_path)).replace("\\", "/")
+                                        found_syntax = True
 
-                        if not found_inner:
-                            file_match = re.search(r"(?:ERROR|FAILED)\s+([a-zA-Z0-9_\-\./\\]+\.py)", error_out)
-                            if file_match:
-                                cand_f = file_match.group(1).replace("\\", "/")
-                                if (out_path / cand_f).exists():
-                                    failing_file = cand_f
+                        # 2. Genel çağrı yığınını metin sırasına göre (finditer ile) topla:
+                        if not found_syntax:
+                            frame_pattern = r'(?:File\s+[\'"](?P<f1>[^\'"]+\.py)[\'"],\s+line\s+(?P<l1>\d+))|(?:(?:^|\s|\b)(?P<f2>[a-zA-Z0-9_\-\./\\]+\.py):(?P<l2>\d+):)'
+                            frame_cands = []
+                            for m in re.finditer(frame_pattern, error_out):
+                                cand_path = (m.group('f1') or m.group('f2') or '').replace("\\", "/").strip()
+                                if not cand_path or any(sys_dir in cand_path for sys_dir in ("/usr/", "site-packages", ".venv", "lib/python")):
+                                    continue
+                                p = Path(cand_path)
+                                rel_path = ""
+                                try:
+                                    if p.is_relative_to(out_path):
+                                        rel_path = str(p.relative_to(out_path)).replace("\\", "/")
+                                except Exception:
+                                    pass
+                                if not rel_path and str(p).startswith(str(out_path)):
+                                    rel_path = str(p)[len(str(out_path)):].lstrip("/\\").replace("\\", "/")
+                                if not rel_path and (out_path / cand_path).exists():
+                                    rel_path = cand_path
+                                if not rel_path:
+                                    matches = list(out_path.rglob(p.name))
+                                    if matches:
+                                        rel_path = str(matches[0].relative_to(out_path)).replace("\\", "/")
+                                if rel_path and rel_path not in frame_cands:
+                                    frame_cands.append(rel_path)
+
+                            # Uygulama kodları ve test kodlarını ayır
+                            app_cands = [fc for fc in frame_cands if not fc.startswith("tests/") and not Path(fc).name.startswith("test_")]
+                            test_cands = [fc for fc in frame_cands if fc.startswith("tests/") or Path(fc).name.startswith("test_")]
+
+                            if etype in ("syntax", "import", "runtime") and app_cands:
+                                # Uygulama içindeki çöküş: en derin (son) uygulama çerçevesini seç
+                                failing_file = app_cands[-1]
+                            elif frame_cands:
+                                # Assertion hatası veya sadece test dosyası varsa en derin çerçeveyi seç
+                                failing_file = frame_cands[-1]
+                            else:
+                                file_match = re.search(r"(?:ERROR|FAILED)\s+([a-zA-Z0-9_\-\./\\]+\.py)", error_out)
+                                if file_match:
+                                    cand_f = file_match.group(1).replace("\\", "/")
+                                    if (out_path / cand_f).exists():
+                                        failing_file = cand_f
 
                         results["error"] = (
                             f"Calistirma Hatasi ({failing_file}):\n"

@@ -2007,4 +2007,50 @@ def test_read_brain_does_not_create_ghost_directory(tmp_path, monkeypatch):
     assert not (ghost_dir / ".myfcli").exists()
 
 
+def test_same_error_loop_breaker_settings():
+    """Aynı hata döngü kırıcı ayarlarının varsayılanlarını ve güncellenebilirliğini doğrula."""
+    from settings import settings
+
+    # Varsayılan değerler
+    assert settings.same_error_loop_breaker_enabled is False
+    assert settings.max_same_error_repeats == 5
+
+    # Güncelleme
+    try:
+        settings.set("same_error_loop_breaker_enabled", "true")
+        assert settings.same_error_loop_breaker_enabled is True
+
+        settings.set("max_same_error_repeats", "8")
+        assert settings.max_same_error_repeats == 8
+    finally:
+        # Geri al (varsayılan: False ve 5)
+        settings.same_error_loop_breaker_enabled = False
+        settings.max_same_error_repeats = 5
+
+
+def test_test_runner_pinpoints_syntax_and_indentation_file(tmp_path):
+    """Test runner'ın pytest çıktısındaki IndentationError/SyntaxError dosyasını hatasız yakaladığını doğrula."""
+    from test_runner import run_code_verification_tests
+
+    # Proje yapısı oluştur
+    (tmp_path / "app" / "services").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "tests").mkdir(parents=True, exist_ok=True)
+
+    # note_service.py dosyasında girinti hatası
+    note_service = tmp_path / "app" / "services" / "note_service.py"
+    note_service.write_text(
+        "class NoteService:\n"
+        "    def delete_note(self, note_id):\n"
+        "        # Burada silme islemi\n"
+        "    def update_note(self):\n"
+        "        return 1\n",
+        encoding="utf-8"
+    )
+
+    res = run_code_verification_tests(str(tmp_path))
+    assert res["syntax_ok"] is False
+    assert "note_service.py" in res["file"]
+    assert res["error_type"] == "syntax"
+
+
 

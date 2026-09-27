@@ -1,5 +1,5 @@
 {
-  "default_model": "ollama/ornith-1.5:9b",
+  "default_model": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
   "coordinator_name": "MYF-Agent",
   "think_mode": true,
   "warmup": false,
@@ -8,14 +8,19 @@
   "max_tokens": 8192,
   "top_p": 0.95,
   "top_k": 40,
-  "planning_model": "ollama/ornith-1.5:9b",
-  "code_model": "ollama/ornith-1.5:9b",
-  "micro_fix_model": "ollama/ornith-1.5:9b",
-  "coordinator_model": "ollama/ornith-1.5:9b",
+  "planning_model": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+  "code_model": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+  "micro_fix_model": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+  "coordinator_model": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
   "micro_fix_max_tries": 3,
   "full_autonomy_cap": 100,
   "repomap_tokens": 2048,
   "permission_mode": "session_allow",
   "auto_audit_log": true,
-  "execution_mode": "sequential"
+  "execution_mode": "sequential",
+  "enable_laya": true,
+  "laya_model": "convaiinnovations/laya",
+  "laya_device": "cpu",
+  "same_error_loop_breaker_enabled": false,
+  "max_same_error_repeats": 5
 }
