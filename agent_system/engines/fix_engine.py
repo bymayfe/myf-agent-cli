@@ -111,7 +111,7 @@ class MicroFixEngine:
         if laya_diagnosis:
             cat = laya_diagnosis.get("category", "")
             act = laya_diagnosis.get("suggested_action", "")
-            diag_hint = f"## FAST DIAGNOSTIC (Laya System 1)\n- Category: {cat}\n- Suggested Action: {act}\n\n"
+            diag_hint = f"## FAST DIAGNOSTIC (LAYA Karar Motoru)\n- Category: {cat}\n- Suggested Action: {act}\n\n"
 
         system_prompt = (
             "You are an expert code repair specialist.\n"
@@ -403,7 +403,7 @@ class Fix:
       - Hata İmzası Takibi (SHA-256):
           - Aynı hata 2. kez görülürse -> Otomatik DEEP_REFACTOR'a yükseltilir (Micro-Fix atlanır).
           - Aynı hata 3. kez görülürse -> LOOP_BREAKER devreye girer (Pipeline durdurulur / döngü kırılır).
-      - Laya Karar Desteği: Hata teşhisi (System 1, ~30ms) ile akıllı mikro-onarım ve döngü riski puanlaması.
+      - Laya Karar Desteği: Hata teşhisi (Karar Motoru, ~30ms) ile akıllı mikro-onarım ve döngü riski puanlaması.
       - Thread-Safe: Singleton state, threading.Lock ile eşzamanlı subagent çağrılarına karşı korunur.
     """
 
@@ -482,7 +482,7 @@ class Fix:
         with self._lock:
             count = self._error_counts.get(sig, 1)
 
-        # Laya System 1 Karar ve Hata Analizi (~30ms)
+        # Laya Karar Motoru Hata Analizi ve Teşhisi (~30ms)
         # Güven eşiği: Laya sınıflandırması bu eşiğin altındaysa, kategoriye göre dar bir
         # onarım stratejisi (örn. yalnızca import satırı yaması) seçmek yerine güvenli
         # varsayılana (full_file) düşülür ve belirsizlik escalation prompt'una iletilir —
@@ -500,7 +500,7 @@ class Fix:
                 conf = laya_diagnosis.get("confidence", 0.0)
                 ms = laya_diagnosis.get("elapsed_ms", 0.0)
                 logger.info("[FIX::Laya] Hata Sınıfı: %s (Güven: %.2f, Süre: %.1fms)", cat, conf, ms)
-                print(f"  ⚡ [LAYA System 1] Hata Teşhisi: {cat} (Güven: %{int(conf*100)}, {ms}ms)")
+                print(f"  ⚡ [LAYA Karar Motoru] Teşhis: {cat} (Güven: %{int(conf*100)}, {ms:.1f}ms)")
 
                 if conf < LAYA_CONFIDENCE_THRESHOLD:
                     laya_low_confidence = True
@@ -508,7 +508,7 @@ class Fix:
                         "[FIX::Laya] Güven eşiğinin altında (%.2f < %.2f) — kategoriye özel dar strateji yerine full_file'a düşülüyor.",
                         conf, LAYA_CONFIDENCE_THRESHOLD,
                     )
-                    print(f"  ⚠  [LAYA System 1] Düşük güven (%{int(conf*100)}) — teşhis kategorisine güvenilmeyecek, geniş bağlamlı onarıma düşülüyor.")
+                    print(f"  ⚠  [LAYA Karar Motoru] Düşük güven (%{int(conf*100)}) — teşhis kategorisine güvenilmeyecek, geniş bağlamlı yaklaşıma düşülüyor.")
                 elif hasattr(laya_engine, "determine_repair_strategy"):
                     strat_info = laya_engine.determine_repair_strategy(
                         error_log=error_log,
@@ -540,8 +540,8 @@ class Fix:
             self._last_loop_broken = False
 
         # 2. Aşama: MICRO_FIX
-        # Laya System 1: Yalnızca noktasal hatalarda ve büyük dosyalarda cerrahi diff (MicroFix) çalıştırılır.
-        # @dataclass, syntax, import veya küçük dosyalarda doğrudan Bütüncül (Full-File) Onarım uygulanır.
+        # Laya Karar Motoru: Yalnızca noktasal sentaks ve import hatalarında cerrahi diff (MicroFix) çalıştırılır.
+        # Mantık, test veya mimari sorunlarda doğrudan Bütüncül (Full-File) Onarım uygulanır.
         if stage == FixStage.MICRO_FIX and target_file and repair_strategy == "micro_fix":
             ok = self.micro.run(
                 error_log=error_log,
@@ -560,7 +560,7 @@ class Fix:
             with self._lock:
                 self._file_stages[target_file] = FixStage.DEEP_REFACTOR
         elif stage == FixStage.MICRO_FIX and repair_strategy == "full_file":
-            print(f"  ⚡ [LAYA System 1] Akıllı Onarım: BÜTÜNCÜL FULL-FILE seçildi -> {strategy_reason}")
+            print(f"  ⚡ [LAYA Karar Motoru] Strateji Tavsiyesi: Bütüncül (Full-File) yaklaşım -> {strategy_reason}")
 
         # 3. Aşama: DEEP_REFACTOR (Escalation)
         active_error_log = error_log
@@ -571,7 +571,7 @@ class Fix:
                 project_dir=output_dir,
             )
             active_error_log = f"{intervention}\n\n{error_log}"
-            print(f"  ⚡ [LAYA System 1] Acil Strateji Müdahalesi aktif ({count}. deneme) -> Döngü kırıcı yönlendirme enjekte edildi.")
+            print(f"  ⚡ [LAYA Karar Motoru] Strateji Tavsiyesi ({count}. deneme) -> Döngü kırıcı yönlendirme enjekte edildi.")
 
         print(f"\n  🚨 [FIX::DeepRefactor] Bütüncül Onarım ({count}. deneme) -> {self.model.split('/')[-1]}!")
         raw, written = EscalationEngine.run(

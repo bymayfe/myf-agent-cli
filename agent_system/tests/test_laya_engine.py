@@ -246,9 +246,9 @@ def test_laya_determine_repair_strategy(tmp_path):
     assert res_dc["strategy"] == "full_file"
     assert "dataclass" in res_dc["reason"]
 
-    # 2. ModuleNotFoundError -> MUST be full_file
+    # 2. ModuleNotFoundError -> MUST be micro_fix (kullanıcı kuralı: micro-fix sentaks ve import hatalarında uygulanır)
     res_mod = engine.determine_repair_strategy("ModuleNotFoundError: No module named 'services.task'")
-    assert res_mod["strategy"] == "full_file"
+    assert res_mod["strategy"] == "micro_fix"
     assert "import" in res_mod["reason"]
 
     # 3. Simple syntax error -> micro_fix

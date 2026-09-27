@@ -524,11 +524,11 @@ class LayaDecisionEngine:
                 "reason": "dataclass_argument_order (Bütüncül sınıf yeniden yazımı gerekli)",
             }
 
-        # Module / Import hataları: Modülün import hiyerarşisi yeniden kurulmalı
-        if "modulenotfounderror" in err_lower or "importerror" in err_lower:
+        # 2. Kural: Noktasal sentaks/typo ve içe aktarım (import) hataları -> MICRO_FIX
+        if any(w in err_lower for w in ("syntaxerror", "nameerror", "indentationerror", "importerror", "modulenotfounderror")):
             return {
-                "strategy": "full_file",
-                "reason": "import_hierarchy (İçe aktarım yapısı yeniden yapılandırması)",
+                "strategy": "micro_fix",
+                "reason": "localized_syntax_or_import (Noktasal cerrahi düzeltme)",
             }
 
         # Metod imza veya argüman uyumsuzluğu
@@ -536,13 +536,6 @@ class LayaDecisionEngine:
             return {
                 "strategy": "full_file",
                 "reason": "signature_contract (Metod/Sınıf argüman sözleşmesi)",
-            }
-
-        # 2. Kural: Noktasal sentaks/typo hataları -> MICRO_FIX
-        if "syntaxerror" in err_lower or "nameerror" in err_lower or "indentationerror" in err_lower:
-            return {
-                "strategy": "micro_fix",
-                "reason": "localized_syntax_or_name (Noktasal cerrahi düzeltme)",
             }
 
         # 3. Kural: Dosya boyutu kontrolü
@@ -566,9 +559,10 @@ class LayaDecisionEngine:
                 "reason": f"small_file ({line_count} satır - tam dosya üretimi daha güvenli)",
             }
 
+        # Sentaks veya import dışındaki mantık/test/runtime hatalarında varsayılan: full_file
         return {
-            "strategy": "micro_fix",
-            "reason": "default_micro_fix",
+            "strategy": "full_file",
+            "reason": "default_full_file",
         }
 
     def generate_loop_breaking_intervention(
@@ -579,7 +573,7 @@ class LayaDecisionEngine:
     ) -> str:
         """
         Aynı hatanın tekrarlandığı durumlarda (kısırdöngü riski),
-        Laya System 1 analizi ile LLM'e doğrudan, net ve somut bir strateji müdahale kartı üretir.
+        Laya Karar Motoru analizi ile LLM'e doğrudan, net ve somut bir strateji tavsiye kartı üretir.
         """
         pinpoint = self.extract_pinpoint_diagnostic(error_log, project_dir=project_dir)
         target_file = pinpoint.get("file", "")
@@ -626,8 +620,9 @@ class LayaDecisionEngine:
 
         card = (
             f"╔══════════════════════════════════════════════════════════════════════════════════════╗\n"
-            f"║ ⚡ LAYA SYSTEM 1 STRATEJİ MÜDAHALESİ — DÖNGÜ KIRICI (Deneme {retry_count})                ║\n"
+            f"║ ⚡ LAYA KARAR REHBERİ — DÖNGÜ KIRICI STRATEJİ MÜDAHALESİ & TAVSİYESİ (Deneme {retry_count})        ║\n"
             f"╚══════════════════════════════════════════════════════════════════════════════════════╝\n"
+            f"ℹ️ [Laya Karar Motoru: Bu bir strateji yönlendirmesidir. Düzeltmeyi Developer yapacaktır.]\n"
             f"⚠️ DİKKAT: Aynı hata ardı ardına tekrarlandı! Önceki yaklaşım kısırdöngü üretiyor.\n"
             f"Aşağıdaki somut çözümü uygulayarak döngüyü kırın:\n\n"
             f"{specific_action}\n"

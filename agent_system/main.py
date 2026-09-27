@@ -631,50 +631,57 @@ def run_pipeline(
 
                     if test_results.get("error"):
                         err_msg = test_results["error"]
-                        logger.warning("[%s] Test Hatasi: %s", agent.display_name, err_msg[:200])
+                        err_type = test_results.get("error_type") or "runtime"
+                        logger.warning("[%s] Test Hatasi (%s): %s", agent.display_name, err_type, err_msg[:200])
 
                         # Log: test hatası — kesin error_type kullan
                         err_id = log_store.log_error(
                             run_id=run_id, step_id=step_id,
                             agent_name=agent.display_name, agent_model=agent.model,
-                            error_type=test_results.get("error_type") or "runtime",
+                            error_type=err_type,
                             error_msg=err_msg,
                             file_path=test_results.get("file", ""),
                             project_dir=output_dir,
                         )
 
-                        # ── FIX ENGINE (Hata Onarımı) ──
-                        target_fix_file = test_results.get("file") or (written[0] if written else "")
-                        fixed, fix_written = fix_engine.repair(
-                            error_log=err_msg,
-                            target_file=target_fix_file,
-                            output_dir=output_dir,
-                            context=context,
-                            run_id=run_id,
-                            step_id=step_id,
-                        )
-                        all_files_written.extend(fix_written)
+                        # ── MICRO-FIX SADECE SENTAKS VE IMPORT HATALARINDA ÇALIŞIR ──
+                        # Test ve mantık hataları (pytest, assertion, runtime vb.) doğrudan QA -> Developer döngüsüne devredilir.
+                        if err_type in ("syntax", "import"):
+                            target_fix_file = test_results.get("file") or (written[0] if written else "")
+                            fixed, fix_written = fix_engine.repair(
+                                error_log=err_msg,
+                                target_file=target_fix_file,
+                                output_dir=output_dir,
+                                context=context,
+                                run_id=run_id,
+                                step_id=step_id,
+                            )
+                            all_files_written.extend(fix_written)
 
-                        if fixed:
-                            post_test = _run_code_verification_tests(output_dir)
-                            if not post_test.get("error"):
-                                print("  ✓ [FIX ENGINE] Hata basariyla cozuldu!")
-                                test_results["resolved"] = True
-                                log_store.resolve_error(err_id, resolver="fix_engine")
-                                error_history.clear()
-                                qa_fail_streak = 0
-                                context.pop("last_test_error", None)
-                                context.pop("STUCK_ALERT", None)
-                            else:
-                                context["last_test_error"] = post_test["error"]
-                                has_physical_error = True
-                                error_history.append(post_test["error"])
-                                if _check_stuck(error_history):
-                                    hint = _STUCK_HINTS[stuck_hint_idx % len(_STUCK_HINTS)]
-                                    stuck_hint_idx += 1
-                                    context["STUCK_ALERT"] = hint
+                            if fixed:
+                                post_test = _run_code_verification_tests(output_dir)
+                                if not post_test.get("error"):
+                                    print("  ✓ [MICRO-FIX] Sentaks/Import hatası cerrahi olarak giderildi!")
+                                    test_results["resolved"] = True
+                                    log_store.resolve_error(err_id, resolver="fix_engine")
                                     error_history.clear()
+                                    qa_fail_streak = 0
+                                    context.pop("last_test_error", None)
+                                    context.pop("STUCK_ALERT", None)
+                                else:
+                                    context["last_test_error"] = post_test["error"]
+                                    has_physical_error = True
+                                    error_history.append(post_test["error"])
+                                    if _check_stuck(error_history):
+                                        hint = _STUCK_HINTS[stuck_hint_idx % len(_STUCK_HINTS)]
+                                        stuck_hint_idx += 1
+                                        context["STUCK_ALERT"] = hint
+                                        error_history.clear()
+                            else:
+                                context["last_test_error"] = err_msg
+                                has_physical_error = True
                         else:
+                            # Mantık, test veya runtime hatalarında Micro-Fix çalıştırılmaz; hata QA Tester ve Developer'a devredilir
                             context["last_test_error"] = err_msg
                             has_physical_error = True
                     else:
@@ -779,7 +786,7 @@ def run_pipeline(
             if agent.role_type == "qa_tester":
                 raw_upper = raw.upper()
 
-                # Laya System 1 QA Değerlendirmesi (~30ms)
+                # Laya Karar Motoru QA Değerlendirmesi (~30ms)
                 qa_eval = laya_engine.evaluate_qa_report(raw) if laya_engine else None
                 is_qa_passed_by_laya = False
                 if qa_eval:
@@ -787,7 +794,7 @@ def run_pipeline(
                     reason = qa_eval.get("reason", "")
                     ms = qa_eval.get("elapsed_ms", 0.0)
                     status_str = "BAŞARILI (PASSED)" if is_qa_passed_by_laya else "BAŞARISIZ (FAILED)"
-                    print(f"  ⚡ [LAYA System 1] QA Rapor Analizi: {status_str} ({reason}) [{ms:.1f}ms]")
+                    print(f"  ⚡ [LAYA Karar Motoru] QA Rapor Analizi: {status_str} ({reason}) [{ms:.1f}ms]")
                     logger.info("[LAYA] QA Rapor Analizi: %s (%s) [%.1fms]", status_str, reason, ms)
 
                 # QA sonrası gerçek fiziksel testleri çalıştır ve doğrula
@@ -842,36 +849,12 @@ def run_pipeline(
                     dev_agent = next((a for a in agents if a.role_type == "developer"), None)
                     qa_agent  = next((a for a in agents if a.role_type == "qa_tester"),  None)
 
-                    # 2. denemede veya tekrarlayan hatada doğrudan FixEngine & Laya devreye girsin
-                    if retry_count >= 2:
-                        err_to_fix = context.get("last_test_error", raw)
-                        fix_file = (test_results.get("file") if test_results else "") or (written[0] if written else "") or (missing_files[0] if missing_files else "")
-                        print(f"\n  🚨 [LOOP BREAKER] QA başarısız oldu (Deneme {retry_count}). FixEngine & Laya ile kökten onarılıyor...")
-                        fixed, fix_written = fix_engine.repair(
-                            error_log=err_to_fix,
-                            target_file=fix_file,
-                            output_dir=output_dir,
-                            context=context,
-                            run_id=run_id,
-                            step_id=step_id,
-                        )
-                        if fixed:
-                            context.pop("last_test_error", None)
-                            context.pop("QA_FEEDBACK", None)
-                            fix_engine.reset_on_success(target_file=fix_file)
-                            is_loop_triggered = False
-                            continue
-                        elif getattr(fix_engine, "is_loop_broken", False):
-                            print("  ⚠️ [DÖNGÜ KIRICI] FixEngine döngü kırıcıyı tetikledi. Kısırdöngü durduruluyor, kalan aşamalara devrediliyor.")
-                            is_loop_triggered = False
-                            continue
-
                     if dev_agent and qa_agent and is_loop_triggered:
                         queue.insert(0, qa_agent)
                         queue.insert(0, dev_agent)
 
                         err_text = context.get("last_test_error", raw)
-                        # Laya ile odaklanmış ve budanmış context üretimi
+                        # Laya Karar Motoru ile odaklanmış ve budanmış bağlam üretimi
                         if laya_engine:
                             focused_feedback = laya_engine.create_focused_retry_context(
                                 error_log=err_text,
@@ -885,7 +868,9 @@ def run_pipeline(
                             )
                             pinpoint = laya_engine.extract_pinpoint_diagnostic(err_text, project_dir=output_dir)
                             if pinpoint.get("file"):
-                                print(f"  ⚡ [LAYA System 1] Odaklanmış Bağlam: {pinpoint['file']} (Satır {pinpoint['line']})")
+                                print(f"  ⚡ [LAYA Karar Motoru] Odaklanmış Hata Konumu: {pinpoint['file']} (Satır {pinpoint['line']})")
+                            if retry_count >= 2:
+                                print(f"  ⚡ [LAYA Karar Motoru] Strateji Tavsiyesi: Developer için döngü kırıcı yönlendirme eklendi.")
                         else:
                             feedback_msg = f"## QA TEST REPORT (Attempt {retry_count}/{MAX_QA_RETRIES})\n{raw[:3000]}\n"
 
