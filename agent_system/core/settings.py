@@ -73,6 +73,11 @@ _DEFAULTS: dict[str, Any] = {
     "permission_mode":   "ask",
     "auto_audit_log":    True,
     "execution_mode":    "sequential",  # "sequential" (1), "subagent" (2), "interactive" (3)
+
+    # ── Laya System 1 Karar Motoru (CPU / Fast Reflex) ──
+    "enable_laya":       True,
+    "laya_model":        "convaiinnovations/laya",
+    "laya_device":       "cpu",
 }
 
 
@@ -278,8 +283,15 @@ class Settings:
         m = str(model_name).strip()
         if not m:
             return self.default_model
-        if "/" not in m and not any(m.startswith(p) for p in ("ollama", "openrouter", "moonshot", "lm_studio")):
-            m = f"ollama/{m}"
+        if "/" not in m and not any(m.startswith(p) for p in ("ollama", "openrouter", "moonshot", "lm_studio", "openai")):
+            prefix = "ollama"
+            try:
+                from config import get_provider_config
+                cfg = get_provider_config()
+                prefix = cfg.get("model_prefix", prefix)
+            except Exception:
+                pass
+            m = f"{prefix}/{m}"
         self._data["default_model"] = m
         self._data["planning_model"] = m
         self._data["code_model"] = m
@@ -402,6 +414,35 @@ class Settings:
         if val_str in mode_map:
             self._data["execution_mode"] = mode_map[val_str]
             self.save()
+
+    # ── Laya System 1 Karar Motoru Ayarları ─────────────────
+
+    @property
+    def enable_laya(self) -> bool:
+        return bool(self._data.get("enable_laya", True))
+
+    @enable_laya.setter
+    def enable_laya(self, value: bool) -> None:
+        self._data["enable_laya"] = bool(value)
+        self.save()
+
+    @property
+    def laya_model(self) -> str:
+        return str(self._data.get("laya_model", "convaiinnovations/laya"))
+
+    @laya_model.setter
+    def laya_model(self, value: str) -> None:
+        self._data["laya_model"] = str(value).strip()
+        self.save()
+
+    @property
+    def laya_device(self) -> str:
+        return str(self._data.get("laya_device", "cpu"))
+
+    @laya_device.setter
+    def laya_device(self, value: str) -> None:
+        self._data["laya_device"] = str(value).strip().lower()
+        self.save()
 
     # ── Yardimci Metodlar ───────────────────────────────────
 

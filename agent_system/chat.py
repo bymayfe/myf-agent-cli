@@ -77,6 +77,7 @@ from config            import (print_config, list_providers,
                                 get_active_provider_name,
                                 set_active_provider, reload_config,
                                 list_provider_models, add_provider_model, set_provider_active_model,
+                                auto_sync_running_model, detect_running_model,
                                 get_output_dir)
 from coordinator_agent import CoordinatorAgent
 from agents            import load_agents
@@ -798,12 +799,43 @@ class CommandHub:
 
     def _model_cmd(self, arg: str):
         ui = ChatUI
+        c = ui._c
+        active_prov = get_active_provider_name()
         if not arg:
             print(ui._c(f"\n  Mevcut Varsayılan Model: {Fore.YELLOW}{settings.default_model}", Fore.CYAN, Style.BRIGHT))
-            print(ui._c("  Kullanım: /model <model_adi> (Örn: /model qwen3.5:4b veya /model qwen3.8:27b)\n", Fore.WHITE))
-            arg = input(ui._c(f"  Yeni model [{settings.default_model}]: ", Fore.CYAN)).strip()
+            saved = list_provider_models(active_prov)
+            if saved:
+                print(c(f"  Kayıtlı Modeller ({active_prov}):", Fore.WHITE))
+                for idx, sm in enumerate(saved, 1):
+                    mark = f" {Fore.GREEN}<< AKTİF{Style.RESET_ALL}" if sm in settings.default_model else ""
+                    print(f"    {idx}. {sm}{mark}")
+                print(f"    {len(saved)+1}. [Sunucudan Aktif Modeli Otomatik Algıla]")
+            print(ui._c("  Kullanım: Numara seçin, 's' (otomatik algıla) veya yeni model adı girin\n", Fore.WHITE))
+            arg = input(ui._c(f"  Model seçimi [{settings.default_model}]: ", Fore.CYAN)).strip()
+
+            if saved and arg.isdigit():
+                val = int(arg)
+                if 1 <= val <= len(saved):
+                    arg = saved[val - 1]
+                elif val == len(saved) + 1:
+                    arg = "auto"
+
+            if arg.lower() in ("s", "auto", "scan", "tespit"):
+                det_id, changed = auto_sync_running_model(active_prov)
+                if det_id:
+                    self.coord.refresh_settings()
+                    ui.success(f"Sunucudan aktif model algılandı ve senkronize edildi: {det_id}")
+                    return
+                else:
+                    ui.error("Sunucudan aktif çalışan model tespit edilemedi.")
+                    return
+
         if arg:
             new_model = settings.set_model_all(arg)
+            try:
+                set_provider_active_model(active_prov, arg)
+            except Exception:
+                pass
             self.coord.refresh_settings()
             ui.success(f"Tüm sistem modelleri tek noktadan güncellendi: {new_model}")
             print(ui._c(f"  • Planlama, Kod, Micro-Fix ve Koordinatör -> {new_model}\n", Fore.WHITE))
@@ -1619,6 +1651,25 @@ class ChatSession:
         )).strip().lower()
         if ans in ("e", "evet", "y", "yes"):
             self.cmds._provider("")
+
+        # Otomatik Model Tespiti ve Senkronizasyonu
+        active_name = get_active_provider_name()
+        det_id, changed = auto_sync_running_model(active_name)
+        if det_id:
+            short_name = det_id.split("/")[-1]
+            if changed:
+                ChatUI.success(f"Lokal sunucudan aktif model algılandı ve senkronize edildi: {short_name}")
+            else:
+                ChatUI.info(f"Aktif sunucu modeli: {short_name}")
+
+        # Model secimi
+        curr_short = settings.default_model.split("/")[-1]
+        print(ChatUI._c(f"\n  Aktif Model: {Fore.YELLOW}{curr_short}{Style.RESET_ALL}{Fore.CYAN} ({settings.default_model})", Fore.CYAN))
+        m_ans = input(ChatUI._c(
+            "  Modeli değiştirmek ister misiniz? [e / Enter]: ", Fore.WHITE
+        )).strip().lower()
+        if m_ans in ("e", "evet", "y", "yes"):
+            self.cmds._model_cmd("")
 
         # Execution Mode secimi
         mode_labels = {

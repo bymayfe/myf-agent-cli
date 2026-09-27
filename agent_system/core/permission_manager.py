@@ -35,6 +35,12 @@ class PermissionManager:
         self._session_grants: set[str] = set()
         self._resource_grants: set[str] = set()
         self._dir_grants: set[str] = set()
+        # Konsol dışı istemciler (web_server.py gibi) burada bir fonksiyon
+        # atayarak input()'u devre dışı bırakabilir. İmza:
+        #   hook(action, resource, agent_name, is_internal) -> "1".."7" (str)
+        # Aynı seçim kodlarını (CLI menüsündeki 1-7) döndürmesi yeterli;
+        # böylece aşağıdaki karar mantığı iki istemci için de ortak kalır.
+        self.approval_hook = None
 
     def get_status_badge(self) -> str:
         """Görsel izin rozeti ve ikonunu döndürür (Header ve Status'te görünür)."""
@@ -102,32 +108,42 @@ class PermissionManager:
         }
         action_label = action_names.get(action, action.upper())
 
-        print()
-        if not is_internal:
-            print(f"  {Fore.RED}{Style.BRIGHT}⚠️  [KRITIK - PROJE DISI ETIM IZNI GEREKLI]{Style.RESET_ALL}")
-            print(f"  Ajan {Fore.CYAN}'{agent_name}'{Style.RESET_ALL} {Fore.RED}{Style.BRIGHT}PROJE KLASORI DISINDA{Style.RESET_ALL} islem yapmak istiyor!")
-            print(f"  Proje Dizin : {get_output_dir()}")
-            print(f"  Hedef Konum : {p_str}")
+        if self.approval_hook is not None:
+            # Web/GUI istemcisi: konsola basmadan, hook üzerinden karar bekle
+            # (hook kendi tarafında SSE permission_request event'i yollayıp
+            # kullanıcı cevabını bekler — burada süreci bloklamıyoruz, hook
+            # kendi bekleme/timeout mantığını yönetir).
+            try:
+                choice = str(self.approval_hook(action, p_str, agent_name, is_internal) or "1").strip()
+            except Exception:
+                choice = "7"  # hook patlarsa güvenli taraf: reddet
         else:
-            print(f"  {Fore.YELLOW}{Style.BRIGHT}🛡️  [IZIN GEREKLI]{Style.RESET_ALL}")
-            print(f"  Ajan {Fore.CYAN}'{agent_name}'{Style.RESET_ALL} su islemi yapmak istiyor:")
-            print(f"  >> {Fore.WHITE}{Style.BRIGHT}[{action_label}]{Style.RESET_ALL} {p_str}")
+            print()
+            if not is_internal:
+                print(f"  {Fore.RED}{Style.BRIGHT}⚠️  [KRITIK - PROJE DISI ETIM IZNI GEREKLI]{Style.RESET_ALL}")
+                print(f"  Ajan {Fore.CYAN}'{agent_name}'{Style.RESET_ALL} {Fore.RED}{Style.BRIGHT}PROJE KLASORI DISINDA{Style.RESET_ALL} islem yapmak istiyor!")
+                print(f"  Proje Dizin : {get_output_dir()}")
+                print(f"  Hedef Konum : {p_str}")
+            else:
+                print(f"  {Fore.YELLOW}{Style.BRIGHT}🛡️  [IZIN GEREKLI]{Style.RESET_ALL}")
+                print(f"  Ajan {Fore.CYAN}'{agent_name}'{Style.RESET_ALL} su islemi yapmak istiyor:")
+                print(f"  >> {Fore.WHITE}{Style.BRIGHT}[{action_label}]{Style.RESET_ALL} {p_str}")
 
-        print()
-        print("  Izin Secenekleri:")
-        print(f"    {Fore.GREEN}[1] 🟢 Sadece 1 kez izin ver (Once){Style.RESET_ALL}")
-        print(f"    {Fore.CYAN}[2] 📄 Bu dosyaya her zaman izin ver (File){Style.RESET_ALL}")
-        print(f"    {Fore.CYAN}[3] 📂 Bu dizindeki dosyalara izin ver (Directory){Style.RESET_ALL}")
-        print(f"    {Fore.BLUE}[4] 🚀 Bu projede '{action_label}' islemlerine hep izin ver (Project){Style.RESET_ALL}")
-        print(f"    {Fore.YELLOW}[5] 🏰 Proje Ici Tam Yetki (Bu klasordeki HER SEYE izin ver, disari cikamasin){Style.RESET_ALL}")
-        print(f"    {Fore.MAGENTA}[6] 🔓 Her Zaman, Her Yerde Izin Ver (Global Tam Otonom Mod){Style.RESET_ALL}")
-        print(f"    {Fore.RED}[7] ❌ REDDET (Deny){Style.RESET_ALL}")
-        print()
+            print()
+            print("  Izin Secenekleri:")
+            print(f"    {Fore.GREEN}[1] 🟢 Sadece 1 kez izin ver (Once){Style.RESET_ALL}")
+            print(f"    {Fore.CYAN}[2] 📄 Bu dosyaya her zaman izin ver (File){Style.RESET_ALL}")
+            print(f"    {Fore.CYAN}[3] 📂 Bu dizindeki dosyalara izin ver (Directory){Style.RESET_ALL}")
+            print(f"    {Fore.BLUE}[4] 🚀 Bu projede '{action_label}' islemlerine hep izin ver (Project){Style.RESET_ALL}")
+            print(f"    {Fore.YELLOW}[5] 🏰 Proje Ici Tam Yetki (Bu klasordeki HER SEYE izin ver, disari cikamasin){Style.RESET_ALL}")
+            print(f"    {Fore.MAGENTA}[6] 🔓 Her Zaman, Her Yerde Izin Ver (Global Tam Otonom Mod){Style.RESET_ALL}")
+            print(f"    {Fore.RED}[7] ❌ REDDET (Deny){Style.RESET_ALL}")
+            print()
 
-        try:
-            choice = input("  Izin Seciminiz [1-7, Enter=1]: ").strip()
-        except (KeyboardInterrupt, EOFError):
-            choice = "7"
+            try:
+                choice = input("  Izin Seciminiz [1-7, Enter=1]: ").strip()
+            except (KeyboardInterrupt, EOFError):
+                choice = "7"
 
         if not choice:
             choice = "1"

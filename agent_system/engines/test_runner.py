@@ -15,6 +15,51 @@ from pathlib import Path
 
 logger = logging.getLogger("test_runner")
 
+BUILTIN_AND_PROTECTED = {
+    "pytest", "pluggy", "iniconfig", "litellm",
+    "sqlite3", "pathlib", "typing", "argparse", "dataclasses",
+    "json", "math", "re", "os", "sys", "time", "datetime",
+    "uuid", "random", "itertools", "functools", "collections",
+    "abc", "unittest", "logging", "shutil", "tempfile", "io",
+    "subprocess", "threading", "multiprocessing", "hashlib",
+    "secrets", "csv", "copy", "socket", "http", "urllib", "enum"
+}
+
+
+def _get_entry_exec_args(entry_path: Path, base_dir: Path) -> tuple[list[str], str]:
+    """Dizin içindeki dosyayı doğru python / python -m komutu ile çalıştıracak argümanları üretir."""
+    try:
+        rel_p = entry_path.relative_to(base_dir)
+        if len(rel_p.parts) > 1:
+            mod_parts = list(rel_p.parts[:-1]) + [rel_p.stem]
+            mod_name = ".".join(mod_parts)
+            return [sys.executable, "-m", mod_name], f"python -m {mod_name}"
+    except Exception:
+        pass
+    return [sys.executable, str(entry_path)], f"python {entry_path.name}"
+
+
+def _check_module_conflicts(out_path: Path) -> str | None:
+    """
+    Hem foo.py hem de foo/ paketi aynı anda mevcutsa bir hata mesajı döndürür.
+    Python hangisini import edeceğini bilemez ve ImportError üretir.
+    """
+    for py_file in out_path.rglob("*.py"):
+        # Sadece __pycache__ veya gizli dizinlerdekini atla
+        if any(p.startswith(".") or p == "__pycache__" for p in py_file.parts):
+            continue
+        sibling_dir = py_file.with_suffix("")
+        if sibling_dir.is_dir() and (sibling_dir / "__init__.py").exists():
+            rel_py = py_file.relative_to(out_path).as_posix()
+            rel_dir = sibling_dir.relative_to(out_path).as_posix()
+            return (
+                f"Modül Çakışması Tespit Edildi: '{rel_py}' dosyası ile '{rel_dir}/' paketi aynı anda mevcut. "
+                f"Python hangisini import edeceğini bilemez (ImportError). "
+                f"Çözüm: '{rel_py}' dosyasını silin VEYA '{rel_dir}/' klasörünü kaldırın — ikisi birlikte olamaz."
+            )
+    return None
+
+
 
 class CodeVerifier:
     """
@@ -45,8 +90,17 @@ class CodeVerifier:
             "file": "",
         }
 
-        py_files = list(out_path.rglob("*.py"))
+        py_files = [f for f in out_path.rglob("*.py") if not any(p.startswith(".") for p in f.parts)]
         if not py_files:
+            return results
+
+        # 0. Modül Çakışması Ön Kontrolü: hem foo.py hem foo/ aynı anda varsa hata ver
+        conflict_error = _check_module_conflicts(out_path)
+        if conflict_error:
+            results["syntax_ok"] = False
+            results["error"] = conflict_error
+            results["error_type"] = "import"
+            results["file"] = conflict_error.split("'")[1] if "'" in conflict_error else ""
             return results
 
         # 1. Syntax & Compile Testi
@@ -102,9 +156,15 @@ class CodeVerifier:
                 pass
 
         # 2. Örnek Veri İle Çalıştırma / Pytest Testi
-        test_files = list(out_path.rglob("test_*.py"))
-        temp_test_files = list((out_path / ".myfcli" / "temp_codes").glob("test_*.py")) if (out_path / ".myfcli" / "temp_codes").exists() else []
-        all_test_files = test_files + temp_test_files
+        test_files = [f for f in out_path.rglob("test_*.py") if not any(p.startswith(".") for p in f.parts)]
+        # Tekilleştir: aynı modül isminin birden fazla yolda bulunmasını engelle (import file mismatch önlemi)
+        seen_stems = set()
+        unique_test_files = []
+        for tf in test_files:
+            if tf.stem not in seen_stems:
+                seen_stems.add(tf.stem)
+                unique_test_files.append(tf)
+        all_test_files = unique_test_files
 
         entry_candidates = [f for f in py_files if f.name in ("main.py", "run.py", "app.py", "cli.py")]
         targets = all_test_files if all_test_files else entry_candidates
@@ -112,29 +172,55 @@ class CodeVerifier:
         if targets:
             target_entry = targets[0]
 
-            from permission_manager import permission_manager
+            try:
+                from permission_manager import permission_manager
+            except ImportError:
+                from core.permission_manager import permission_manager
 
             # Otomatik Bağımlılık Yükleme
-            req_file = out_path / "requirements.txt"
-            if req_file.exists():
+            req_files = [f for f in out_path.rglob("requirements.txt") if not any(p in f.parts for p in (".venv", "venv", ".git", ".myfcli"))]
+            if req_files:
+                root_req = out_path / "requirements.txt"
+                if not root_req.exists() and req_files:
+                    try:
+                        import shutil
+                        shutil.copy2(req_files[0], root_req)
+                    except Exception:
+                        pass
+
                 cmd_install = "pip install -r requirements.txt"
                 if permission_manager.check_permission("run_command", cmd_install, agent_name="system_test"):
                     try:
-                        pip_res = subprocess.run(
-                            [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
-                            cwd=str(out_path),
-                            capture_output=True,
-                            text=True,
-                            # 30sn cok kisa: agir paketler (torch, tensorflow, opencv vb.) veya
-                            # yavas/kisitli baglanti durumunda daima "basarisiz" gibi gorunup
-                            # gercekte hic ilgisi olmayan kod hatalari gibi yanlis teshis ediliyordu.
-                            timeout=240,
-                        )
-                        if pip_res.returncode != 0:
-                            logger.warning(
-                                "Bagimlilik kurulumu basarisiz oldu (devam ediliyor): %s",
-                                (pip_res.stderr or "")[-500:],
+                        # Sistem test araçlarının (özellikle pytest) eski sürümlerle ezilmesini / downgrade olmasını engelle
+                        safe_pkgs = []
+                        for rf in req_files:
+                            try:
+                                raw_reqs = rf.read_text(encoding="utf-8", errors="ignore").splitlines()
+                                for rline in raw_reqs:
+                                    rline_clean = rline.strip()
+                                    if not rline_clean or rline_clean.startswith("#") or rline_clean.startswith("`"):
+                                        continue
+                                    pkg_name = re.split(r"[=<>!~]", rline_clean)[0].strip().lower()
+                                    if pkg_name in BUILTIN_AND_PROTECTED:
+                                        continue
+                                    if rline_clean not in safe_pkgs:
+                                        safe_pkgs.append(rline_clean)
+                            except Exception:
+                                pass
+
+                        if safe_pkgs:
+                            pip_res = subprocess.run(
+                                [sys.executable, "-m", "pip", "install"] + safe_pkgs,
+                                cwd=str(out_path),
+                                capture_output=True,
+                                text=True,
+                                timeout=240,
                             )
+                            if pip_res.returncode != 0:
+                                logger.warning(
+                                    "Bagimlilik kurulumu basarisiz oldu (devam ediliyor): %s",
+                                    (pip_res.stderr or "")[-500:],
+                                )
                     except subprocess.TimeoutExpired:
                         logger.warning(
                             "Bagimlilik kurulumu 240sn icinde tamamlanamadi (buyuk paket/yavas baglanti "
@@ -146,11 +232,11 @@ class CodeVerifier:
 
             is_test = bool(all_test_files)
             if is_test:
-                cmd_str = "pytest"
-                run_args = [sys.executable, "-m", "pytest"]
+                rel_test_paths = [str(f.relative_to(out_path)) for f in all_test_files]
+                cmd_str = f"pytest {' '.join(rel_test_paths[:3])}"
+                run_args = [sys.executable, "-m", "pytest", "-o", "pythonpath=."] + rel_test_paths
             else:
-                cmd_str = f"python {target_entry.name}"
-                run_args = [sys.executable, str(target_entry)]
+                run_args, cmd_str = _get_entry_exec_args(target_entry, out_path)
 
             if not permission_manager.check_permission("run_command", cmd_str, agent_name="system_test"):
                 results["error"] = "Test calistirmasi kullanici tarafindan reddedildi."
@@ -164,7 +250,7 @@ class CodeVerifier:
                     paths.append(str(src_dir))
                 # Top-level Python paketlerini de PYTHONPATH'e ekle
                 for p in out_path.iterdir():
-                    if p.is_dir() and (p / "__init__.py").exists():
+                    if p.is_dir() and not p.name.startswith(".") and p.name not in ("__pycache__", "venv", "env"):
                         paths.append(str(p))
                 env["PYTHONPATH"] = os.pathsep.join(paths)
                 res = subprocess.run(
@@ -180,11 +266,53 @@ class CodeVerifier:
                 if res.returncode != 0:
                     error_out = res.stderr.strip() if res.stderr.strip() else res.stdout.strip()
                     # Pytest çıkış kodu 5: ExitCode.NO_TESTS_COLLECTED (0 test toplandı / test fonksiyonu yok)
-                    # Bu durum bir kod çökmesi veya sentaks hatası değildir.
-                    if is_test and (res.returncode == 5 or "collected 0 items" in error_out or "no tests ran" in error_out):
+                    # SADECE çıktıda gerçek bir hata (ERROR, FAILED, Traceback, Exception) yoksa bu temiz kabul edilir.
+                    has_collection_error = (
+                        "error" in error_out.lower()
+                        or "failed" in error_out.lower()
+                        or "traceback" in error_out.lower()
+                    )
+                    if is_test and res.returncode == 5 and not has_collection_error:
                         results["executed"] = True
                         results["output"] = "Pytest: 0 test toplandi (tanimli test bulunamadi)."
                     else:
+                        # Eğer ModuleNotFoundError / ImportError oluştuysa ve eksik paket harici bir pip paketi ise, dinamik olarak kurup testi tekrar dene
+                        if "ModuleNotFoundError: No module named" in error_out or "ImportError: No module named" in error_out:
+                            missing_m = re.search(r"No module named\s+['\"]([a-zA-Z0-9_\-]+)['\"]", error_out)
+                            if missing_m:
+                                top_pkg = missing_m.group(1).strip()
+                                if top_pkg.lower() not in BUILTIN_AND_PROTECTED and not (out_path / top_pkg).exists() and not (out_path / f"{top_pkg}.py").exists():
+                                    is_internal = any(list(out_path.rglob(f"{top_pkg}.py")) + list(out_path.rglob(top_pkg)))
+                                    if not is_internal:
+                                        try:
+                                            logger.info("[TEST_RUNNER] Eksik 3. parti paket tespit edildi: %s, pip install deneniyor...", top_pkg)
+                                            pip_try = subprocess.run(
+                                                [sys.executable, "-m", "pip", "install", top_pkg],
+                                                cwd=str(out_path),
+                                                capture_output=True,
+                                                text=True,
+                                                timeout=60,
+                                            )
+                                            if pip_try.returncode == 0:
+                                                res = subprocess.run(
+                                                    run_args,
+                                                    cwd=str(out_path),
+                                                    capture_output=True,
+                                                    text=True,
+                                                    timeout=20,
+                                                    env=env,
+                                                )
+                                                results["output"] = res.stdout[:800]
+                                                if res.returncode == 0:
+                                                    results["executed"] = True
+                                                    results["error"] = None
+                                                    results["error_type"] = None
+                                                    return results
+                                                else:
+                                                    error_out = res.stderr.strip() if res.stderr.strip() else res.stdout.strip()
+                                        except Exception as ex:
+                                            logger.debug("[TEST_RUNNER] Otomatik paket kurulum denemesi hatası: %s", ex)
+
                         if "ImportError" in error_out or "ModuleNotFoundError" in error_out:
                             etype = "import"
                         elif "SyntaxError" in error_out or "IndentationError" in error_out:
@@ -199,25 +327,37 @@ class CodeVerifier:
                             etype = "runtime"
 
                         # Hatanın meydana geldiği asıl dosyayı yakala:
-                        # 1. Python traceback'indeki EN SON File "...", line X satırı (hatayı asıl üreten dosya)
-                        # 2. Pytest çıktısındaki 'ERROR path/to/test.py' veya 'FAILED path/to/test.py'
+                        # 1. Python standart traceback: File "...", line X
+                        # 2. Pytest traceback: path/to/file.py:X: in ... veya path/to/file.py:X:
+                        # 3. Pytest ERROR/FAILED satırı
                         failing_file = str(target_entry.relative_to(out_path)).replace("\\", "/")
 
                         tb_matches = re.findall(r'File\s+"([^"]+\.py)"', error_out)
+                        pytest_matches = re.findall(r'(?:^|\s|\b)([a-zA-Z0-9_\-\./\\]+\.py):\d+:', error_out)
+                        all_cands = tb_matches + pytest_matches
+
                         found_inner = False
-                        if tb_matches:
-                            for cand_path in reversed(tb_matches):
-                                p = Path(cand_path)
+                        if all_cands:
+                            for cand_path in reversed(all_cands):
+                                cand_clean = cand_path.replace("\\", "/").strip()
+                                if any(sys_dir in cand_clean for sys_dir in ("/usr/", "site-packages", ".venv", "lib/python")):
+                                    continue
+                                p = Path(cand_clean)
                                 try:
                                     if p.is_relative_to(out_path):
                                         failing_file = str(p.relative_to(out_path)).replace("\\", "/")
                                         found_inner = True
                                         break
                                 except Exception:
-                                    if str(p).startswith(str(out_path)):
-                                        failing_file = str(p)[len(str(out_path)):].lstrip("/\\").replace("\\", "/")
-                                        found_inner = True
-                                        break
+                                    pass
+                                if str(p).startswith(str(out_path)):
+                                    failing_file = str(p)[len(str(out_path)):].lstrip("/\\").replace("\\", "/")
+                                    found_inner = True
+                                    break
+                                if (out_path / cand_clean).exists():
+                                    failing_file = cand_clean
+                                    found_inner = True
+                                    break
 
                         if not found_inner:
                             file_match = re.search(r"(?:ERROR|FAILED)\s+([a-zA-Z0-9_\-\./\\]+\.py)", error_out)
@@ -271,8 +411,9 @@ class CodeVerifier:
                     if not results.get("error"):
                         for entry_file in entry_candidates:
                             try:
+                                base_args, base_cmd = _get_entry_exec_args(entry_file, out_path)
                                 dry_res = subprocess.run(
-                                    [sys.executable, str(entry_file), "--help"],
+                                    base_args + ["--help"],
                                     cwd=str(out_path),
                                     capture_output=True,
                                     text=True,
@@ -284,7 +425,7 @@ class CodeVerifier:
                                     rel_entry = str(entry_file.relative_to(out_path)).replace("\\", "/")
                                     results["error"] = (
                                         f"Giris Noktasi Import Hatasi ({rel_entry}):\n"
-                                        f"[Komut]: python {rel_entry} --help\n"
+                                        f"[Komut]: {base_cmd} --help\n"
                                         f"[Terminal]:\n{err_text}"
                                     )
                                     results["error_type"] = "import"
@@ -298,7 +439,7 @@ class CodeVerifier:
                                         for sc_group in subcmd_matches:
                                             subcmds.extend([s.strip() for s in sc_group.split(",") if s.strip()])
 
-                                    cmds_to_test = [[sys.executable, str(entry_file), sc] for sc in subcmds[:3]]
+                                    cmds_to_test = [base_args + [sc] for sc in subcmds[:3]]
                                     if not cmds_to_test:
                                         temp_smoke_file = out_path / ".myfcli" / "smoke_sample.log"
                                         temp_smoke_file.parent.mkdir(parents=True, exist_ok=True)
@@ -309,7 +450,7 @@ class CodeVerifier:
                                                 "2026-08-28 12:00:02 WARN 192.168.1.100 Endpoint not found\n",
                                                 encoding="utf-8"
                                             )
-                                        cmds_to_test = [[sys.executable, str(entry_file), str(temp_smoke_file)]]
+                                        cmds_to_test = [base_args + [str(temp_smoke_file)]]
 
                                     for cmd_args in cmds_to_test:
                                         smoke_res = subprocess.run(

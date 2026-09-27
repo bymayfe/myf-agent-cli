@@ -536,6 +536,13 @@ def extract_planned_files_from_architecture(arch_text: str) -> list[str]:
         # DOSYA satırı: bu seviyeye kadar olan tüm ata dizinleri birleştirip
         # tam yolu yeniden inşa et.
         ancestor_parts = [path_stack[lvl] for lvl in sorted(path_stack) if lvl < indent_level]
+        # Root placeholder temizliği (project_root/, root/, workspace/ vb.)
+        if ancestor_parts and (
+            ancestor_parts[0].lower() in ("project_root", "root", "workspace", "project", "my_project", "app_root")
+            or ancestor_parts[0].lower().endswith(("_root", "-root"))
+        ):
+            ancestor_parts = ancestor_parts[1:]
+
         full_path = "/".join(ancestor_parts + [segment]) if ancestor_parts else segment
         cand = full_path.replace("\\", "/")
 

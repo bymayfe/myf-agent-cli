@@ -25,14 +25,15 @@ import shutil
 
 _THIS_DIR = Path(__file__).parent
 _PROJECT_ROOT = _THIS_DIR.parent
+_WORKSPACE_ROOT = _PROJECT_ROOT.parent
 
 def _resolve_binary_path() -> Optional[Path]:
     """Windows, Linux ve macOS için uygun codebase-memory-mcp binary yolunu bulur."""
-    cb_dir = _PROJECT_ROOT / "third_party" / "codebase_memory"
     candidates = [
-        cb_dir / ("codebase-memory-mcp.exe" if sys.platform == "win32" else "codebase-memory-mcp"),
-        cb_dir / "codebase-memory-mcp.exe",
-        cb_dir / "codebase-memory-mcp",
+        _WORKSPACE_ROOT / "third_party" / "codebase_memory" / ("codebase-memory-mcp.exe" if sys.platform == "win32" else "codebase-memory-mcp"),
+        _PROJECT_ROOT / "third_party" / "codebase_memory" / ("codebase-memory-mcp.exe" if sys.platform == "win32" else "codebase-memory-mcp"),
+        Path.home() / ".local" / "bin" / "codebase-memory-mcp",
+        Path("/usr/local/bin/codebase-memory-mcp"),
     ]
     # Sistem PATH'inde var mı?
     which_p = shutil.which("codebase-memory-mcp")
@@ -40,8 +41,8 @@ def _resolve_binary_path() -> Optional[Path]:
         candidates.append(Path(which_p))
 
     for c in candidates:
-        if c.exists() and (c.is_file() or not c.is_dir()):
-            return c
+        if c.exists() and (c.is_file() or c.is_symlink()):
+            return c.resolve()
     return None
 
 _BINARY_PATH = _resolve_binary_path()
@@ -324,11 +325,14 @@ class CodebaseGraphEngine:
         # Binary varsa mimariyi çek
         if self.is_available():
             try:
+                # Yeni/değişen dosyaları MCP grafiğinde güncelle (re-index)
+                self.index_repository(p_dir, mode="fast")
                 arch = self.get_architecture(p_dir)
+                ast_map = self._ast_fallback(p_dir)
                 if arch and len(arch.strip()) > 20 and "error" not in arch.lower():
-                    result = f"[Codebase Memory Graph — High Performance]\n{arch}"
+                    result = f"{ast_map}\n\n[Codebase Architecture Summary]\n{arch}"
                     self._repomap_cache[p_dir] = result
-                    print("  ✓  [Codebase] Codebase Memory MCP grafiği başarıyla yüklendi.")
+                    print("  ✓  [Codebase] Codebase Memory MCP grafiği ve AST sembol haritası yüklendi.")
                     return result
             except Exception:
                 pass
@@ -369,6 +373,21 @@ class CodebaseGraphEngine:
                                 if isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef)):
                                     args = [a.arg for a in sub.args.args]
                                     file_signatures.append(f"    def {sub.name}({', '.join(args)})")
+                                elif isinstance(sub, ast.AnnAssign) and isinstance(sub.target, ast.Name):
+                                    # Dataclass/model alan adları (ör. password_hash: str) —
+                                    # ajanların "hangi field gercekten var" bilgisini metot
+                                    # listesi kadar net gormesi icin (bkz. layatest5:
+                                    # User(password=...) cagrisi, gercek alan password_hash idi).
+                                    try:
+                                        type_str = ast.unparse(sub.annotation)
+                                    except Exception:
+                                        type_str = "?"
+                                    file_signatures.append(f"    field {sub.target.id}: {type_str}")
+                                elif isinstance(sub, ast.Assign):
+                                    # SQLAlchemy / genel sınıf alanları (ör. password_hash = db.Column(...))
+                                    for t in sub.targets:
+                                        if isinstance(t, ast.Name):
+                                            file_signatures.append(f"    field {t.id}")
                         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                             args = [a.arg for a in node.args.args]
                             file_signatures.append(f"  def {node.name}({', '.join(args)})")

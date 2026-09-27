@@ -7,6 +7,7 @@ tespit ve strateji değiştirme mekanizmalarını yönetir.
 
 from __future__ import annotations
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -60,8 +61,17 @@ class ProfilingEngine:
 
     @classmethod
     def detect_optimize_request(cls, text: str) -> bool:
-        text_lower = text.lower()
-        return any(kw in text_lower for kw in cls.OPTIMIZE_KEYWORDS)
+        # Pipeline rol başlıklarını ("Performans Optimizatoru:", "optimizer") hariç tut
+        clean_text = re.sub(r"(?i)(?:Performans Optimizat[oö]r[uü]|optimizer)[^\n]*", "", text)
+        text_lower = clean_text.lower()
+        for kw in cls.OPTIMIZE_KEYWORDS:
+            if kw in ("hiz", "hız", "speed", "yavaş", "yavas", "profil"):
+                if re.search(r'\b' + re.escape(kw) + r'\b', text_lower):
+                    return True
+            else:
+                if kw in text_lower:
+                    return True
+        return False
 
     @classmethod
     def run_profiling(cls, output_dir: str) -> str:

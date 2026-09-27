@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "description": "Desteklenen LLM saglayicilari ve her saglayici icin ajan model atamalari ve context window limitleri.",
-  "active_provider": "nvidia",
+  "active_provider": "llama_cpp",
   "providers": {
     "ollama": {
       "label": "Lokal - Ollama",
@@ -25,17 +25,17 @@
         "deepseek-r1:32b": 4096
       },
       "agent_models": {
-        "coordinator": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
-        "product_manager": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
-        "software_architect": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
-        "developer": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
-        "qa_tester": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
-        "reviewer": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
-        "optimizer": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
-        "security_auditor": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
-        "documentation_writer": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
-        "devops_engineer": "openai/nvidia/nemotron-3.5-lightning-30b-a3b",
-        "custom": "openai/nvidia/nemotron-3.5-lightning-30b-a3b"
+        "coordinator": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "product_manager": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "software_architect": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "developer": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "qa_tester": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "reviewer": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "optimizer": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "security_auditor": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "documentation_writer": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "devops_engineer": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "custom": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M"
       }
     },
     "kimi": {
@@ -207,17 +207,17 @@
         "Qwen2.5-Coder-7B-Instruct-Q4_K_M": 32768
       },
       "agent_models": {
-        "coordinator": "openai/default",
-        "product_manager": "openai/default",
-        "software_architect": "openai/default",
-        "developer": "openai/default",
-        "qa_tester": "openai/default",
-        "reviewer": "openai/default",
-        "optimizer": "openai/default",
-        "security_auditor": "openai/default",
-        "documentation_writer": "openai/default",
-        "devops_engineer": "openai/default",
-        "custom": "openai/default"
+        "coordinator": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "product_manager": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "software_architect": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "developer": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "qa_tester": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "reviewer": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "optimizer": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "security_auditor": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "documentation_writer": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "devops_engineer": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M",
+        "custom": "openai/Qwen2.5-Coder-7B-Instruct-abliterated-Q5_K_M"
       }
     }
   }

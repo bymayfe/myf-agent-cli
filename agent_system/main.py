@@ -62,6 +62,10 @@ from agents import (
 )
 from log_store import log_store
 from git_guard import GitGuard
+try:
+    from laya_engine import laya_engine
+except ImportError:
+    laya_engine = None
 
 logger = logging.getLogger("pipeline")
 
@@ -524,6 +528,12 @@ def run_pipeline(
             blocks  = extract_code_blocks(raw)
             written = _save_code_blocks(blocks, agent_name=agent.id)
             all_files_written.extend(written)
+            if written:
+                try:
+                    from codebase_graph import codebase_graph
+                    codebase_graph.invalidate_cache(output_dir)
+                except Exception:
+                    pass
 
             # ── DEV ajani: fiziksel test + Eksik Dosya Tespiti + Micro-Fix + Escalation ──
             test_results     = None
@@ -751,7 +761,8 @@ def run_pipeline(
                             "retry_count": retry_count,
                             "elapsed_sec": round(elapsed_step, 1),
                         })
-                    break
+                    if not queue:
+                        break
                 elif can_retry and _optimizer_agent:
                     retry_count += 1
                     dev_agent = next((a for a in agents if a.role_type == "developer"), None)
@@ -767,8 +778,32 @@ def run_pipeline(
             is_loop_triggered = False
             if agent.role_type == "qa_tester":
                 raw_upper = raw.upper()
-                has_explicit_fail = "## STATUS: FAILED" in raw_upper
-                has_real_crash = ("last_test_error" in context) or ("IMPORT" in raw_upper and "ERROR" in raw_upper) or ("SYNTAX" in raw_upper and "ERROR" in raw_upper) or ("TRACEBACK" in raw_upper)
+
+                # Laya System 1 QA Değerlendirmesi (~30ms)
+                qa_eval = laya_engine.evaluate_qa_report(raw) if laya_engine else None
+                is_qa_passed_by_laya = False
+                if qa_eval:
+                    is_qa_passed_by_laya = bool(qa_eval.get("passed", False))
+                    reason = qa_eval.get("reason", "")
+                    ms = qa_eval.get("elapsed_ms", 0.0)
+                    status_str = "BAŞARILI (PASSED)" if is_qa_passed_by_laya else "BAŞARISIZ (FAILED)"
+                    print(f"  ⚡ [LAYA System 1] QA Rapor Analizi: {status_str} ({reason}) [{ms:.1f}ms]")
+                    logger.info("[LAYA] QA Rapor Analizi: %s (%s) [%.1fms]", status_str, reason, ms)
+
+                # QA sonrası gerçek fiziksel testleri çalıştır ve doğrula
+                qa_test_run = _run_code_verification_tests(output_dir)
+                if not qa_test_run.get("error"):
+                    # Fiziksel testler başarıyla geçti!
+                    context.pop("last_test_error", None)
+                    has_real_crash = False
+                    test_results = qa_test_run
+                else:
+                    # Testler fiziksel olarak hala hata veriyor
+                    context["last_test_error"] = qa_test_run["error"]
+                    has_real_crash = True
+                    test_results = qa_test_run
+
+                has_explicit_fail = ("## STATUS: FAILED" in raw_upper) or (not is_qa_passed_by_laya and "STATUS: FAILED" in raw_upper)
 
                 # Mimari eksik dosya kontrolü
                 arch_text = context.get("architecture", "")
@@ -777,6 +812,9 @@ def run_pipeline(
                 missing_files = []
                 for pf in planned_files:
                     pf_clean = pf.replace("\\", "/").lstrip("./")
+                    for pfx in ("project_root/", "root/", "workspace/", "project/", "app_root/"):
+                        if pf_clean.lower().startswith(pfx):
+                            pf_clean = pf_clean[len(pfx):]
                     exists = any(
                         cf.replace("\\", "/").lstrip("./") == pf_clean or
                         cf.replace("\\", "/").endswith("/" + pf_clean) or
@@ -786,11 +824,17 @@ def run_pipeline(
                     if not exists:
                         missing_files.append(pf_clean)
 
-                is_qa_failed = has_explicit_fail or has_real_crash or (len(missing_files) > 0 and retry_count < 2)
-                MAX_QA_RETRIES = 3
+                if is_qa_passed_by_laya and not has_real_crash and len(missing_files) == 0:
+                    is_qa_failed = False
+                elif not has_real_crash and not has_explicit_fail and len(missing_files) == 0:
+                    is_qa_failed = False
+                else:
+                    is_qa_failed = has_explicit_fail or has_real_crash or (len(missing_files) > 0 and retry_count < 2)
+
+                MAX_QA_RETRIES = 5 if is_full_autonomy else 3
                 can_retry = (retry_count < MAX_QA_RETRIES)
 
-                if (is_qa_failed or "last_test_error" in context) and can_retry:
+                if is_qa_failed and can_retry:
                     retry_count += 1
                     is_loop_triggered = True
                     qa_fail_streak += 1
@@ -798,11 +842,11 @@ def run_pipeline(
                     dev_agent = next((a for a in agents if a.role_type == "developer"), None)
                     qa_agent  = next((a for a in agents if a.role_type == "qa_tester"),  None)
 
-                    # 2. denemede doğrudan FixEngine devreye girsin (eğer fiziksel hata varsa ve eksik dosya yoksa)
-                    if retry_count >= 2 and ("last_test_error" in context or test_results) and not missing_files:
+                    # 2. denemede veya tekrarlayan hatada doğrudan FixEngine & Laya devreye girsin
+                    if retry_count >= 2:
                         err_to_fix = context.get("last_test_error", raw)
-                        fix_file = (test_results.get("file") if test_results else "") or (written[0] if written else "")
-                        print(f"\n  🚨 [LOOP BREAKER] QA başarısız oldu (Deneme {retry_count}). FixEngine ile kökten onarılıyor...")
+                        fix_file = (test_results.get("file") if test_results else "") or (written[0] if written else "") or (missing_files[0] if missing_files else "")
+                        print(f"\n  🚨 [LOOP BREAKER] QA başarısız oldu (Deneme {retry_count}). FixEngine & Laya ile kökten onarılıyor...")
                         fixed, fix_written = fix_engine.repair(
                             error_log=err_to_fix,
                             target_file=fix_file,
@@ -817,13 +861,34 @@ def run_pipeline(
                             fix_engine.reset_on_success(target_file=fix_file)
                             is_loop_triggered = False
                             continue
+                        elif getattr(fix_engine, "is_loop_broken", False):
+                            print("  ⚠️ [DÖNGÜ KIRICI] FixEngine döngü kırıcıyı tetikledi. Kısırdöngü durduruluyor, kalan aşamalara devrediliyor.")
+                            is_loop_triggered = False
+                            continue
 
                     if dev_agent and qa_agent and is_loop_triggered:
-                        if is_optimize_mode and _optimizer_agent:
-                            queue.insert(0, _optimizer_agent)
                         queue.insert(0, qa_agent)
                         queue.insert(0, dev_agent)
-                        feedback_msg = f"## QA TEST REPORT (Attempt {retry_count}/{MAX_QA_RETRIES})\n{raw[:3000]}\n"
+
+                        err_text = context.get("last_test_error", raw)
+                        # Laya ile odaklanmış ve budanmış context üretimi
+                        if laya_engine:
+                            focused_feedback = laya_engine.create_focused_retry_context(
+                                error_log=err_text,
+                                full_code_files=context.get("code_files", ""),
+                                project_dir=output_dir,
+                                retry_count=retry_count,
+                            )
+                            feedback_msg = (
+                                f"## QA TEST REPORT (Attempt {retry_count}/{MAX_QA_RETRIES})\n"
+                                f"{focused_feedback}\n"
+                            )
+                            pinpoint = laya_engine.extract_pinpoint_diagnostic(err_text, project_dir=output_dir)
+                            if pinpoint.get("file"):
+                                print(f"  ⚡ [LAYA System 1] Odaklanmış Bağlam: {pinpoint['file']} (Satır {pinpoint['line']})")
+                        else:
+                            feedback_msg = f"## QA TEST REPORT (Attempt {retry_count}/{MAX_QA_RETRIES})\n{raw[:3000]}\n"
+
                         if missing_files:
                             feedback_msg += "\n🚨 MISSING FILES PLANNED IN ARCHITECTURE BUT NOT YET WRITTEN:\n" + "\n".join(f"- {f}" for f in missing_files) + "\n"
                         if "last_test_error" in context:
@@ -849,7 +914,7 @@ def run_pipeline(
                             project_dir=output_dir,
                         )
 
-                elif not can_retry and (is_qa_failed or "last_test_error" in context):
+                elif not can_retry and is_qa_failed:
                     print(f"\n  ⚠️  [DÖNGÜ SINIRI] Maksimum QA deneme sınırına ({MAX_QA_RETRIES}) ulaşıldı. Kalan sorunlar Reviewer'a aktarılıyor.")
                     post_v = _run_code_verification_tests(output_dir)
                     if post_v.get("error"):
@@ -862,10 +927,12 @@ def run_pipeline(
                         context.pop("QA_FEEDBACK", None)
                     context.pop("last_test_error", None)
 
-                elif "QA_FEEDBACK" in context:
-                    del context["QA_FEEDBACK"]
+                else:
+                    # QA Tamamen Başarılı — Hata bağlamını ve döngü bayraklarını temizle
                     context.pop("last_test_error", None)
+                    context.pop("QA_FEEDBACK", None)
                     context.pop("STUCK_ALERT", None)
+                    qa_fail_streak = 0
 
             # Changelog (son adÄ±m veya reviewer)
             is_last = (len(queue) == 0)

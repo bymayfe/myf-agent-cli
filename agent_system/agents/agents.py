@@ -139,20 +139,46 @@ def build_agent_prompt(
     if "all_previous" in allowed_keys:
         allowed_keys = set(context.keys())
 
-    # Maksimum karakter sınırları (Büyük modeller ve tam mimari planları için genişletildi)
-    char_limits = {
-        "project_brief": 3000,
-        "prd": 12000,
-        "architecture": 16000,
-        "code_files": 8000,
-        "repomap": 4000,
-        "codebase_graph": 4000,
-        "QA_FEEDBACK": 6000,
-        "last_test_error": 3000,
-        "test_report": 6000,
-        "optimization_report": 4000,
-        "MISSING_FILES": 4000,
-    }
+    is_retry = bool(context.get("QA_FEEDBACK") or context.get("last_test_error") or context.get("STUCK_ALERT"))
+
+    if is_retry:
+        # Döngü/Hata düzeltme modunda gereksiz doküman şişkinliğini buda,
+        # sadece cerrahi teşhis ve düzeltilecek dosyalara odaklan (VRAM koruması):
+        char_limits = {
+            "project_brief": 1000,
+            "prd": 1500,
+            "architecture": 3500,
+            "code_files": 3500,
+            "repomap": 2000,
+            "codebase_graph": 2000,
+            "QA_FEEDBACK": 3000,
+            "last_test_error": 1500,
+            "test_report": 2000,
+            "optimization_report": 2000,
+            "MISSING_FILES": 1500,
+        }
+        # QA_FEEDBACK varsa mükerrer yükleri (duplicate) ayıkla:
+        if "QA_FEEDBACK" in context:
+            if "last_test_error" in context and context.get("last_test_error") in context.get("QA_FEEDBACK", ""):
+                allowed_keys.discard("last_test_error")
+            if agent.role_type == "developer":
+                allowed_keys.discard("prd")  # Developer retry'da PRD'ye değil koda odaklanır
+                char_limits["architecture"] = 1200  # Mimariden gelen eski/hatalı kod bloklarının kopyalanmasını önle
+    else:
+        # İlk üretim adımları için dengeli sınırlar (RTX 4070 8GB VRAM koruması):
+        char_limits = {
+            "project_brief": 2000,
+            "prd": 6000,
+            "architecture": 7000,
+            "code_files": 4500,
+            "repomap": 2500,
+            "codebase_graph": 2500,
+            "QA_FEEDBACK": 3000,
+            "last_test_error": 2000,
+            "test_report": 3000,
+            "optimization_report": 2500,
+            "MISSING_FILES": 2000,
+        }
 
     # Baglamlari sec ve ekle
     for key, value in context.items():
@@ -176,17 +202,24 @@ def build_agent_prompt(
 
     # Agent task
     task_hint = _task_hint(agent)
-    # If QA Feedback exists, enforce STRICT CODE ONLY constraint on developer
+    # If QA Feedback exists, enforce STRICT REPAIR constraint on developer
     if agent.role_type == "developer" and ("QA_FEEDBACK" in context or "last_test_error" in context):
-        task_hint += (
-            "\n\n🚨 STRICT RULE: Generate ONLY code blocks that fix the erroneous files. "
-            "Chit-chat, conversational filler, or text reports are STRICTLY FORBIDDEN. "
-            "Your response must ONLY contain code blocks with the appropriate filepath comment "
-            "for the project's language (Python, JS/TS, Go, Rust, etc.) or "
-            "<<<<<<< SEARCH ... ======= ... >>>>>>> REPLACE blocks! "
-            "Choose the file extension AND comment syntax based on the actual project language, "
-            "never assume .py or Python by default."
+        task_hint = (
+            "🚨 REPAIR TASK: Fix ONLY the problematic files reported in QA TEST FEEDBACK and PHYSICAL TEST ERROR.\n"
+            "Do NOT rewrite unrelated working files! If a model, method, or class has an error, fix it correctly and do NOT copy broken architectural snippets.\n\n"
+            "🔴 CRITICAL RULES FOR REPAIR:\n"
+            "1. In @dataclass models: Required fields (without default values) MUST COME FIRST. Optional fields (with default values like `id: Optional[int] = None`) MUST COME LAST.\n"
+            "2. CONTRACT PRESERVATION: Never delete existing fields/methods that other modules rely on (e.g. preserve `frequency`).\n"
+            "3. IMPORT INTEGRITY: Use real folder names from the codebase map (e.g. `from repository.habit_repository import HabitRepository`). Never invent plural/singular directory variations.\n"
+            "4. 🔴 SQLALCHEMY SINGLETON: NEVER create `db = SQLAlchemy()` inside model files (user.py, task.py, etc.)! "
+            "There must be exactly ONE `db` in the project (in `app/db.py` or `app/__init__.py`). "
+            "Model files MUST import it: `from app.db import db` or `from ..db import db`.\n"
+            "5. 🔴 FLASK APP CONTEXT IN TESTS: Test files must import `create_app` and set up app_context in setUp/tearDown. "
+            "Template: setUp → `self.app = create_app({...}); self.ctx = self.app.app_context(); self.ctx.push(); db.create_all()`. "
+            "tearDown → `db.session.remove(); db.drop_all(); self.ctx.pop()`.\n"
+            "6. Your response must ONLY contain code blocks with '# filepath: folder/file.py' (or surgical SEARCH/REPLACE blocks). No conversational filler!"
         )
+
 
     parts.append(f"=== TASK ===\n{task_hint}")
 

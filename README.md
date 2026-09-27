@@ -1,7 +1,7 @@
-# 🤖 MYF AI Agent CLI
+# 🤖 MYF AI Agent CLI (v3.0)
 
 > **Otonom, Çok Katmanlı Multi-Agent Yazılım Mühendisliği ve Kodlama Konsolu**  
-> Claude Code, Google Antigravity ve Devin mimarilerinden ilham alınarak geliştirilmiş; yerel (Ollama, llama.cpp, LM Studio) ve bulut (NVIDIA NIM, Moonshot, OpenRouter) LLM sağlayıcılarını destekleyen yeni nesil otonom ajan motoru.
+> Laya System 1 karar ve refleks motoruyla güçlendirilmiş; yerel (llama-server, Ollama, LM Studio) ve bulut (OpenRouter, DeepSeek, Gemini) LLM sağlayıcılarını destekleyen otonom ajan motoru.
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -31,6 +31,10 @@
 
 ### 4. 🌐 Canlı Web Araştırması (Agent-Reach)
 - DuckDuckGo / SearXNG üzerinden canlı web araması yaparak güncel dokümantasyon ve kütüphane sürümlerini çeker.
+
+### 5. ⚡ Laya System 1 Karar ve Refleks Motoru
+- Ajanlar arası durum sınıflandırma, kısır döngü kırma (Loop-Breaker) ve dinamik rota kararları için ultra-hızlı (~30ms) yerel karar modeli.
+- `llama_server/models/laya` yerel dizini desteği ile 100% offline ve internet bağımsız çalışır.
 
 ---
 

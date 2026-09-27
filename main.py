@@ -17,6 +17,16 @@ ROOT = Path(__file__).parent.resolve()
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "agent_system"))
 
+# agent_system.main sembollerini tam uyumluluk için dışa aktar
+try:
+    import agent_system.main as _asm
+    sys.modules["main"] = _asm
+    for _k, _v in _asm.__dict__.items():
+        if not _k.startswith("__"):
+            globals()[_k] = _v
+except Exception:
+    pass
+
 def main():
     if len(sys.argv) > 1 and sys.argv[1] in ("--help", "-h"):
         print(__doc__)

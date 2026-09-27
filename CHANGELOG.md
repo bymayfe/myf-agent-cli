@@ -4,6 +4,26 @@ Bu projedeki tüm önemli değişiklikler bu dosyada belgelenmektedir. Format [K
 
 ---
 
+## [3.0.0] - 2026-09-27
+
+### ⚡ Laya System 1 Karar ve Refleks Motoru, Zengin Repomap AST ve Kararlı Test Motoru
+
+- **Laya System 1 Karar ve Refleks Motoru (`agent_system/engines/laya_engine.py`):**
+  - Ultra-hızlı (~30ms) yerel çıkarım sağlayan `laya` karar modeli entegre edildi.
+  - Ajanlar arası durum sınıflandırma, kısır döngü kırma (loop-breaker) ve acil durum yönlendirmeleri için yerel System 1 refleksi eklendi.
+  - Yerel model dizini desteği: `llama_server/models/laya` dizinindeki yerel ağırlıklar (`model.safetensors`, `rl_agent_config.json`) otomatik olarak algılanarak internet gerektirmeden 100% offline çalıştırılıyor.
+- **Zengin AST Repomap & Model Alan Çıkarımı (`agent_system/engines/codebase_graph.py`):**
+  - AST tarayıcısına `ast.AnnAssign` ve `ast.Assign` desteği eklendi.
+  - Sınıf içi veritabanı alanları (`password_hash`, dataclass nitelikleri vb.) repomap özetinde MCP grafiğinin en başına yerleştirilerek LLM promptlarında budanmadan (truncation olmadan) QA ve Developer ajanlarına eksiksiz iletiliyor.
+- **Kusursuz Pytest Koleksiyonu & Modül Çakışması Önleme (`agent_system/engines/test_runner.py`):**
+  - `.myfcli`, `.venv`, `.git` ve `__pycache__` gibi gizli dizinler test taramasından tamamen hariç tutuldu.
+  - Pytest çalıştırılırken test dosyaları modül gövdesine (`stem`) göre tekilleştirildi; böylece aynı isme sahip dosyaların Pytest'te ölümcül `import file mismatch` hatasına yol açması engellendi.
+  - Pytest çalıştırma parametrelerine `-o pythonpath=.` doğrudan eklendi.
+- **Ajan Rol Şablonları & Flask Standartları (`agent_system/agents/role_templates.json`):**
+  - Tüm testlerin `.myfcli/temp_codes/` yerine kesinlikle `tests/` klasöründe üretilmesi kurala bağlandı.
+  - Flask-SQLAlchemy projeleri için QA testlerinde `@pytest.fixture` ile `with app.app_context(): yield client/app` kalıbı zorunlu kılındı (`RuntimeError: Working outside of application context` hatası sıfırlandı).
+  - Developer şablonuna `def create_app(config=None):` imzası ve `from app.db import db` import kuralı eklendi.
+
 ## [1.11.0] - 2026-09-21
 
 ### 🏷️ Akıllı Oturum İsimlendirme, Geçmiş Zenginleştirme ve Pipeline QA / Test Doğrulama Yönlendirmesi

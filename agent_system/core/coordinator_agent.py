@@ -69,8 +69,10 @@ TASK FLOW & EDITING STRATEGY:
 
 2. NEW PROJECT FROM SCRATCH OR MAJOR ARCHITECTURAL REFACTOR (Pipeline):
    - If a new project is being built from scratch or there is a major request rebuilding the whole system:
-   - First present an architectural plan and ask the user for approval ("Does this plan look good, shall we proceed?").
-   - Once the user gives definitive approval, ALWAYS use this exact marker format:
+   - 🚨 STRICT ROLE CONSTRAINT: YOU ARE ONLY A PROJECT COORDINATOR. YOU ARE STRICTLY FORBIDDEN FROM WRITING SOURCE CODE OR GENERATING FULL FILES FOR NEW PROJECTS!
+   - Full code implementation, file creation, and unit test writing are strictly the responsibility of the Software Architect and Developer agents in the pipeline.
+   - For new project requests: ONLY output a concise 4-5 bullet point architectural roadmap and ask the user for approval ("Bu mimari plan sizin için uygun mu? Başlatalım mı?").
+   - Once the user gives definitive approval (e.g. "onayla", "başlat", "tamam"), ALWAYS output this exact marker format:
 
 ##PIPELINE_START##
 [Clarified, complete project summary containing all additions and changes]
@@ -78,7 +80,8 @@ TASK FLOW & EDITING STRATEGY:
 
 RULES:
 - OUTPUT LANGUAGE (MANDATORY): Always communicate with the user, explain your steps, and present plans in fluent Turkish (Türkçe). Keep all code, variable names, comments inside code files, and markers in English.
-- For minor fixes, avoid lengthy unnecessary explanations and directly produce the code block.
+- NEVER write complete multi-file codebases or pytest test suites yourself in chat. All file generation belongs to the pipeline agents.
+- For minor single-file fixes in an already existing project, avoid lengthy unnecessary explanations and directly produce the targeted code block.
 - Courtesy & Confirmation Messages (e.g. "eyw", "sağol", "teşekkürler", "tamamdır", "eline sağlık"): Do not re-run tests or restart the project; politely acknowledge with "Rica ederim" and wait for a new request.
 """
 
@@ -254,15 +257,19 @@ class CoordinatorAgent:
     def _call_llm(self, on_token: Callable[[str, str], None] | None = None) -> str:
         """
         Streaming completion. Her token on_token callback'ine iletilir.
-        Ollama ise dogrudan REST client, degilse LiteLLM kullanir.
+        Gercek branching mantigi (Ollama vs LiteLLM, think mode, context budgeting)
+        llm_client.call_llm_stream()'de merkezi olarak tanimli -- web_server.py'nin
+        /api/llm/complete endpoint'i de ayni fonksiyonu kullanir, boylece CLI ve web
+        arasinda bu katmanda drift olmaz.
         """
         from config import LLM_PARAMS, AGENT_MODELS
         from settings import settings
         from context_budgeter import context_budgeter
+        from llm_client import call_llm_stream
 
         model = AGENT_MODELS.get("coordinator", list(AGENT_MODELS.values())[0])
 
-        # Dinamik Context Bütçesi & Otomatik Özetleme (should_summarize)
+        # Dinamik Context Butcesi & Otomatik Ozetleme (should_summarize)
         active_history = self.history
         if context_budgeter.should_summarize(self._system_prompt, active_history, model, threshold=0.75):
             active_history = context_budgeter.summarize_history(active_history, keep_recent=4)
@@ -280,56 +287,8 @@ class CoordinatorAgent:
                 temperature=settings.temperature,
                 max_tokens=min(settings.max_tokens, 2048),
             )
-        else:
-            from litellm import completion
-            comp_kwargs = {
-                "model": model,
-                "messages": messages,
-                "temperature": settings.temperature,
-                "max_tokens": max(settings.max_tokens, 4096) if settings.think_mode else settings.max_tokens,
-                "api_base": LLM_PARAMS["api_base"],
-                "api_key": LLM_PARAMS["api_key"],
-                "stream": True,
-            }
-            # Nemotron, Kimi-K3, DeepSeek modelleri için akıl yürütme (thinking) parametreleri
-            is_thinking_model = any(k in model.lower() for k in ("nemotron", "deepseek", "kimi", "r1"))
-            if settings.think_mode or is_thinking_model:
-                comp_kwargs["extra_body"] = {
-                    "chat_template_kwargs": {"enable_thinking": True},
-                    "reasoning_budget": min(settings.max_tokens, 16384),
-                }
 
-            from llm_client import ColdStartWatcher
-            with ColdStartWatcher(model, api_base=LLM_PARAMS.get("api_base", "")):
-                resp = completion(**comp_kwargs)
-                resp_iter = iter(resp)
-                first_chunk = next(resp_iter, None)
-
-            full_text = ""
-            try:
-                def _handle_chunk(chunk):
-                    nonlocal full_text
-                    delta = chunk.choices[0].delta if chunk and chunk.choices else None
-                    if delta:
-                        reasoning = getattr(delta, "reasoning_content", None) or getattr(delta, "thinking", None)
-                        if reasoning and on_token and settings.think_mode:
-                            on_token(reasoning, "thinking")
-
-                        token = getattr(delta, "content", "") or ""
-                        if token:
-                            full_text += token
-                            if on_token:
-                                on_token(token, "content")
-
-                if first_chunk:
-                    _handle_chunk(first_chunk)
-
-                for chunk in resp_iter:
-                    _handle_chunk(chunk)
-            except KeyboardInterrupt:
-                if on_token:
-                    on_token("\n[durduruldu]\n", "content")
-            return full_text
+        return call_llm_stream(messages, model=model, on_token=on_token)
 
     @classmethod
     def warmup(cls) -> bool:
@@ -357,14 +316,7 @@ class CoordinatorAgent:
 
     def get_project_brief(self) -> str:
         """Pipeline icin proje ozetini sohbet gecmisinden cikart."""
-        # 1. En son ##PIPELINE_START## varsa ve ici doluysa onu al
-        for msg in reversed(self.history):
-            if msg["role"] == "assistant":
-                brief = extract_pipeline_marker(msg["content"])
-                if brief and len(brief.strip()) > 30:
-                    return brief.strip()
-
-        # 2. Onay veya sistem enjeksiyonu olmayan gercek kullanici mesajlarini filtrele
+        # 1. Onay veya sistem enjeksiyonu olmayan gercek kullanici mesajlarini filtrele
         clean_user_msgs = []
         for m in self.history:
             if m["role"] != "user":
@@ -375,7 +327,7 @@ class CoordinatorAgent:
             # Parantezli sistem eklerini temizle: (Kullanici sunulan plani onayladi...)
             txt = re.sub(r"\(Kullanici sunulan plani onayladi.*?\)", "", txt, flags=re.I | re.DOTALL).strip()
             # Kısa onay kelimelerini filtrele
-            if txt.lower() in ("başla", "basla", "evet", "tamam", "ok", "onay", "onaylıyorum", "onayliyorum", "hadi", "devam", "devam et", "ve"):
+            if txt.lower() in ("başla", "basla", "evet", "tamam", "ok", "onay", "onaylıyorum", "onayliyorum", "hadi", "devam", "devam et", "ve", "+"):
                 continue
             if len(txt) > 0:
                 clean_user_msgs.append(txt)
@@ -401,6 +353,14 @@ class CoordinatorAgent:
                 base += f"\n\n=== APPROVED ARCHITECTURE & PLAN ===\n{last_plan}"
             
             return base
+
+        # 2. Fallback: Kullanıcı mesajı bulunamazsa en son ##PIPELINE_START## al
+        for msg in reversed(self.history):
+            if msg["role"] == "assistant":
+                brief = extract_pipeline_marker(msg["content"])
+                if brief and len(brief.strip()) > 30:
+                    return brief.strip()
+
         return ""
 
     def reset(self, new_session: bool = False) -> None:

@@ -373,13 +373,103 @@ def write_output_file(relative_path: str, content: str, agent_name: str = "devel
     Üretilen kodu veya SEARCH/REPLACE diff bloklarını aktif proje klasörü altına uygular.
     Alt dizinler otomatik oluşturulur.
     """
+    # 1. Veritabanı ikili dosyalarını metin olarak yazmayı engelle (.db, .sqlite vb.)
+    ext = Path(relative_path).suffix.lower()
+    if ext in {".db", ".sqlite", ".sqlite3", ".db-wal", ".db-shm"}:
+        logger.warning("Veritabanı ikili dosyası (%s) metin olarak diske yazılamaz. Tablo şemaları kodla oluşturulmalıdır.", relative_path)
+        print(f"  ⚠️  Veritabanı ikili dosyası metin olarak yazılamaz (engellendi): {relative_path}")
+        return False
+
+    out_dir = get_output_dir()
+
+    # 2. Halüsinasyon öneklerini temizle (laya/, project_root/, workspace/, app_root/ vb.)
+    clean_p = relative_path.replace("\\", "/").lstrip("./")
+    for pfx in ("laya/", "project_root/", "root/", "workspace/", "project/", "app_root/"):
+        if clean_p.lower().startswith(pfx) and not (clean_p.lower() == pfx.rstrip("/")):
+            # Eğer proje kökünde gerçekten 'laya' klasörü önceden yoksa öneki temizle
+            if not (Path(out_dir) / pfx.rstrip("/")).is_dir() or pfx == "laya/":
+                clean_p = clean_p[len(pfx):]
+                relative_path = clean_p
+                break
+
+    # 3. Kök dizinde aynı isimde dosya açılmaya çalışılıyorsa ama alt dizinde mevcutsa o alt dizine yönlendir
+    if "/" not in relative_path and out_dir and Path(out_dir).is_dir():
+        for existing in Path(out_dir).rglob(relative_path):
+            if existing.is_file() and not any(p in existing.parts for p in IGNORED_SCAN_DIRS):
+                try:
+                    rel_exist = existing.relative_to(Path(out_dir)).as_posix()
+                    if rel_exist != relative_path:
+                        relative_path = rel_exist
+                        break
+                except Exception:
+                    pass
+
+    # 4. Klasör tekil/çoğul uyuşmazlığı koruması (örn: repositories/ vs repository/, services/ vs service/)
+    parts = list(Path(relative_path).parts)
+    if len(parts) > 1 and out_dir and Path(out_dir).is_dir():
+        first_dir = parts[0]
+        if not (Path(out_dir) / first_dir).is_dir():
+            alt_candidates = []
+            if first_dir.endswith("ies"):
+                alt_candidates.append(first_dir[:-3] + "y")
+            elif first_dir.endswith("s"):
+                alt_candidates.append(first_dir[:-1])
+            elif first_dir.endswith("y"):
+                alt_candidates.append(first_dir[:-1] + "ies")
+            else:
+                alt_candidates.append(first_dir + "s")
+
+            for alt in alt_candidates:
+                if (Path(out_dir) / alt).is_dir():
+                    parts[0] = alt
+                    relative_path = str(Path(*parts)).replace("\\", "/")
+                    break
+
+    # 4.5. Test dizini mükerrerlik koruması:
+    # Eğer dosya 'tests/...' altına yazılmaya çalışılıyorsa ama projede zaten var olan bir alt dizinde '.../tests' varsa,
+    # (örn. 'my_app/tests' varken kökte mükerrer 'tests/' açılmasını engelle), dosyayı mevcut test klasörüne yönlendir.
+    if parts[0] == "tests" and not (Path(out_dir) / "tests").is_dir() and out_dir and Path(out_dir).is_dir():
+        for existing_tests in Path(out_dir).rglob("tests"):
+            if existing_tests.is_dir() and not any(p in existing_tests.parts for p in IGNORED_SCAN_DIRS):
+                try:
+                    rel_tests = existing_tests.relative_to(Path(out_dir)).as_posix()
+                    if rel_tests != "tests":
+                        parts = list(Path(rel_tests).parts) + parts[1:]
+                        relative_path = str(Path(*parts)).replace("\\", "/")
+                        break
+                except Exception:
+                    pass
+
     if not permission_manager.check_permission("write_file", relative_path, agent_name=agent_name):
         print(f"  ❌ Dosya yazımı engellendi: {relative_path}")
         return False
 
-    out_dir = get_output_dir()
     full_path = Path(out_dir) / relative_path
     full_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Modül Çakışması Temizleme: hem foo.py hem foo/ paketi aynı anda olamaz.
+    # Hangisi yazılıyorsa diğerini temizle — Python import belirsizliğini önler.
+    if full_path.suffix == ".py":
+        # .py dosyası yazılıyor → aynı isimli klasör (paket) varsa sil
+        sibling_pkg = full_path.with_suffix("")
+        if sibling_pkg.is_dir() and (sibling_pkg / "__init__.py").exists():
+            import shutil as _shutil
+            try:
+                _shutil.rmtree(sibling_pkg)
+                logger.info("[brain] Çakışan paket klasörü silindi: %s/", sibling_pkg.relative_to(Path(out_dir)))
+                print(f"  🧹 Çakışan paket klasörü temizlendi: {sibling_pkg.relative_to(Path(out_dir))}/")
+            except Exception as _e:
+                logger.warning("[brain] Çakışan paket klasörü silinemedi: %s", _e)
+    elif full_path.suffix == "" and "__init__" not in full_path.name:
+        # Paket klasörü oluşturuluyor → aynı isimli .py varsa sil
+        sibling_py = full_path.with_suffix(".py")
+        if sibling_py.is_file():
+            try:
+                sibling_py.unlink()
+                logger.info("[brain] Çakışan modül dosyası silindi: %s", sibling_py.relative_to(Path(out_dir)))
+                print(f"  🧹 Çakışan modül dosyası temizlendi: {sibling_py.relative_to(Path(out_dir))}")
+            except Exception as _e:
+                logger.warning("[brain] Çakışan modül dosyası silinemedi: %s", _e)
 
     original_text = None
     if full_path.exists():

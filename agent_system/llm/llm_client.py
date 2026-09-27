@@ -249,6 +249,91 @@ def trim_prompt_to_context(
     return system_prompt, trimmed_user
 
 
+def call_llm_stream(
+    messages: list[dict],
+    model: Optional[str] = None,
+    on_token=None,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
+    think_mode: Optional[bool] = None,
+) -> str:
+    """
+    Genel amaçlı, keyfi bir `messages` listesiyle çalışan streaming completion.
+
+    coordinator_agent.py::_call_llm ile web_server.py'nin /api/llm/complete
+    endpoint'i AYNI bu fonksiyonu kullanır — böylece "hangi model, hangi
+    branching mantığıyla çağrılıyor" tek bir yerde tanımlı kalır (CLI ile
+    web arasında bu katmanda drift olmaz).
+
+    on_token(token: str, token_type: "content"|"thinking") çağrılır.
+    Tam metni döndürür.
+    """
+    from settings import settings as _settings
+
+    selected_model = model or AGENT_MODELS.get("coordinator") or list(AGENT_MODELS.values())[0]
+    temp = _settings.temperature if temperature is None else temperature
+    think = _settings.think_mode if think_mode is None else think_mode
+    max_tok = _settings.max_tokens if max_tokens is None else max_tokens
+
+    if is_ollama_provider(selected_model, LLM_PARAMS.get("api_base", "")):
+        return call_ollama_chat(
+            messages=messages,
+            model=selected_model,
+            api_base=LLM_PARAMS.get("api_base", "http://localhost:11434"),
+            stream=True,
+            on_token=on_token,
+            think_mode=think,
+            temperature=temp,
+            max_tokens=min(max_tok, 2048),
+        )
+
+    comp_kwargs = {
+        "model": selected_model,
+        "messages": messages,
+        "temperature": temp,
+        "max_tokens": max(max_tok, 4096) if think else max_tok,
+        "api_base": LLM_PARAMS["api_base"],
+        "api_key": LLM_PARAMS["api_key"],
+        "stream": True,
+    }
+    is_thinking_model = any(k in selected_model.lower() for k in ("nemotron", "deepseek", "kimi", "r1"))
+    if think or is_thinking_model:
+        comp_kwargs["extra_body"] = {
+            "chat_template_kwargs": {"enable_thinking": True},
+            "reasoning_budget": min(max_tok, 16384),
+        }
+
+    with ColdStartWatcher(selected_model, api_base=LLM_PARAMS.get("api_base", "")):
+        resp = completion(**comp_kwargs)
+        resp_iter = iter(resp)
+        first_chunk = next(resp_iter, None)
+
+    full_text = ""
+
+    def _handle_chunk(chunk):
+        nonlocal full_text
+        delta = chunk.choices[0].delta if chunk and chunk.choices else None
+        if delta:
+            reasoning = getattr(delta, "reasoning_content", None) or getattr(delta, "thinking", None)
+            if reasoning and on_token and think:
+                on_token(reasoning, "thinking")
+            token = getattr(delta, "content", "") or ""
+            if token:
+                full_text += token
+                if on_token:
+                    on_token(token, "content")
+
+    try:
+        if first_chunk:
+            _handle_chunk(first_chunk)
+        for chunk in resp_iter:
+            _handle_chunk(chunk)
+    except KeyboardInterrupt:
+        if on_token:
+            on_token("\n[durduruldu]\n", "content")
+    return full_text
+
+
 def call_llm(
     agent_name: str,
     system_prompt: str,

@@ -39,6 +39,9 @@ from settings import settings
 from session_manager import session_manager, Session
 from coordinator_agent import CoordinatorAgent
 from engines.quota_engine import quota_engine
+from main import run_pipeline
+from permission_manager import permission_manager
+from llm_client import call_llm_stream
 
 logger = logging.getLogger("web_agent")
 
@@ -823,6 +826,95 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 """
 
 
+class SSEWriter:
+    """Tek bir HTTP response üzerinden event:/data: çerçeveleriyle SSE akışı yazar.
+
+    web_ui/src/lib/useCoordinatorChat.ts içindeki parseSseChunk ile birebir uyumludur.
+    """
+
+    def __init__(self, handler: "WebHarnessHandler"):
+        self.handler = handler
+        self._lock = threading.Lock()
+        self._closed = False
+
+    def start(self):
+        self.handler.send_response(200)
+        self.handler.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.handler.send_header("Cache-Control", "no-cache")
+        self.handler.send_header("X-Accel-Buffering", "no")
+        self.handler.end_headers()
+
+    def send(self, event: str, data) -> bool:
+        """True döner: yazma başarılı. False: bağlantı kapanmış (client ayrıldı)."""
+        if self._closed:
+            return False
+        payload = json.dumps(data, ensure_ascii=False)
+        frame = f"event: {event}\ndata: {payload}\n\n".encode("utf-8")
+        with self._lock:
+            try:
+                self.handler.wfile.write(frame)
+                self.handler.wfile.flush()
+                return True
+            except Exception:
+                self._closed = True
+                return False
+
+
+_ROLE_ICONS = {
+    "product_manager": "📋", "software_architect": "🏗️", "developer": "💻",
+    "qa_tester": "🧪", "reviewer": "🔍", "security_auditor": "🛡️",
+    "documentation_writer": "📝", "devops_engineer": "🚀", "optimizer": "⚡",
+    "coordinator": "🧭", "custom": "🤖",
+}
+
+# main.py'nin progress_callback'inde kullandığı "phase" isimlerini
+# PipelineStepEvent.status ile eşler (web_ui/src/lib/pipeline/pipelineRunner.ts).
+_PHASE_TO_STATUS = {
+    "start": "start",
+    "generating": "progress",
+    "error": "error",
+    "missing_files": "progress",
+    "completed": "done",
+}
+
+
+def _pipeline_step_event(step: int, total: int, agent, phase: str, extra: dict) -> dict:
+    role = getattr(agent, "role_type", "custom")
+    status = _PHASE_TO_STATUS.get(phase, "progress")
+    extra = extra or {}
+
+    message = {
+        "start": f"{getattr(agent, 'display_name', role)} başladı",
+        "generating": "Üretiliyor...",
+        "error": extra.get("error", "Hata oluştu"),
+        "missing_files": f"Eksik dosyalar tespit edildi: {', '.join(extra.get('missing', []) or [])}",
+        "completed": f"{len(extra.get('written', []) or [])} dosya üretildi" if extra.get("written") else "Tamamlandı",
+    }.get(phase, phase)
+
+    written = extra.get("written") or []
+    test_results = extra.get("test_results")
+    if test_results:
+        status = "test_fail" if test_results.get("error") or extra.get("is_loop_triggered") else (
+            "test_pass" if written else status
+        )
+
+    return {
+        "stage": step,
+        "totalStages": total,
+        "stageName": role,
+        "stageIcon": _ROLE_ICONS.get(role, "🤖"),
+        "status": status,
+        "message": message,
+        "file": written[0] if written else None,
+        "details": {
+            "files": written,
+            "role": role,
+            "model": getattr(agent, "model", None),
+            **extra,
+        },
+    }
+
+
 class WebHarnessHandler(BaseHTTPRequestHandler):
     """DeepSeek Harness tarzı REST ve Streaming HTTP sunucu işleyicisi."""
 
@@ -831,6 +923,58 @@ class WebHarnessHandler(BaseHTTPRequestHandler):
     # nesnesine yazabilir; /api/chat, /api/sessions/* ve /api/settings bu
     # kilidi kullanarak birbirini bozmadan sırayla çalışır.
     _coordinator_lock = threading.Lock()
+
+    # Pipeline SSE akışı sırasında permission_manager'dan gelen izin
+    # sorularını tarayıcıya iletmek için kullanılan köprü. Uygulama tek
+    # kullanıcılık/tek aktif pipeline varsayımıyla çalıştığından, o anda
+    # açık olan pipeline SSE bağlantısını tek bir class-level referansta
+    # tutmak yeterli (bkz. _install_permission_bridge).
+    _active_pipeline_sse: "SSEWriter | None" = None
+    _permission_lock = threading.Lock()
+    _pending_permission_events: dict = {}
+    _pending_permission_decisions: dict = {}
+
+    @classmethod
+    def _install_permission_bridge(cls):
+        """permission_manager.approval_hook'u web akışına bağlar (sunucu başlarken bir kez çağrılır)."""
+
+        def _web_approval_hook(action: str, resource: str, agent_name: str, is_internal: bool) -> str:
+            import uuid
+            req_id = uuid.uuid4().hex[:12]
+            event = threading.Event()
+            with cls._permission_lock:
+                cls._pending_permission_events[req_id] = event
+
+            sent = False
+            if cls._active_pipeline_sse is not None:
+                sent = cls._active_pipeline_sse.send("permission_request", {
+                    "id": req_id,
+                    "action": action,
+                    "resource": resource,
+                    "agentName": agent_name,
+                    "isExternal": not is_internal,
+                })
+
+            if not sent:
+                # Tarayıcıda açık bir pipeline akışı yoksa güvenli tarafta kal: reddet.
+                with cls._permission_lock:
+                    cls._pending_permission_events.pop(req_id, None)
+                return "7"
+
+            # /api/permission/respond gelene kadar bekle (makul bir tavan süreyle —
+            # sekme kapanır/kullanıcı cevap vermezse süreç sonsuza dek asılı kalmasın).
+            answered = event.wait(timeout=600)
+            with cls._permission_lock:
+                cls._pending_permission_events.pop(req_id, None)
+                decision = cls._pending_permission_decisions.pop(req_id, None)
+
+            if not answered or not decision:
+                return "7"  # timeout -> reddet
+
+            # PermissionDecision (frontend) -> permission_manager choice kodu
+            return {"once": "1", "file": "2", "session": "5", "deny": "7"}.get(decision, "7")
+
+        permission_manager.approval_hook = _web_approval_hook
 
     def log_message(self, format, *args):
         return
@@ -1063,6 +1207,119 @@ class WebHarnessHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(json.dumps({"ok": False, "error": str(e)}).encode("utf-8"))
 
+        elif path == "/api/permission/respond":
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length).decode("utf-8")
+            try:
+                payload = json.loads(body)
+                req_id = payload.get("id", "")
+                decision = payload.get("decision", "deny")
+                with WebHarnessHandler._permission_lock:
+                    ev = WebHarnessHandler._pending_permission_events.get(req_id)
+                    if ev is not None:
+                        WebHarnessHandler._pending_permission_decisions[req_id] = decision
+                        ev.set()
+                        ok = True
+                    else:
+                        ok = False  # zaten timeout olmuş veya yanlış id
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": ok}).encode("utf-8"))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.end_headers()
+                self.wfile.write(json.dumps({"ok": False, "error": str(e)}).encode("utf-8"))
+            return
+
+        elif path == "/api/pipeline/run":
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length).decode("utf-8")
+            try:
+                payload = json.loads(body)
+            except Exception:
+                payload = {}
+
+            project_brief = payload.get("project_brief", "").strip()
+            project_dir = payload.get("project_dir") or None
+            full_autonomy = bool(payload.get("full_autonomy", False))
+            sandbox = bool(payload.get("sandbox", False))
+
+            if not project_brief:
+                self.send_response(400)
+                self.end_headers()
+                self.wfile.write(b'{"error": "project_brief gerekli"}')
+                return
+
+            sse = SSEWriter(self)
+            sse.start()
+            WebHarnessHandler._active_pipeline_sse = sse
+
+            # CLI'daki "Tam Otonomi" / "Sandbox" seçimlerinin web karşılığı:
+            # CLI'da bunlar chat.py::_run_pipeline() içinde input() ile sorulur,
+            # burada istek body'sinden geliyor.
+            if sandbox:
+                permission_manager.set_mode("session_allow")
+                permission_manager._session_grants.add("all")
+            if project_dir:
+                set_output_dir(project_dir)
+
+            def _progress_cb(step, total, agent, phase, extra=None):
+                sse.send("pipeline_step", _pipeline_step_event(step, total, agent, phase, extra or {}))
+
+            try:
+                with WebHarnessHandler._coordinator_lock:
+                    result = run_pipeline(
+                        project_brief,
+                        progress_callback=_progress_cb,
+                        project_dir=project_dir,
+                        max_retries=-1 if full_autonomy else 3,
+                    )
+                sse.send("pipeline_done", {"ok": True, "result": {
+                    k: v for k, v in (result or {}).items() if k in ("status", "files_written", "project_dir")
+                }})
+            except Exception as exc:
+                logger.exception("[web_server] Pipeline calisirken hata")
+                sse.send("pipeline_done", {"ok": False, "error": str(exc)})
+            finally:
+                WebHarnessHandler._active_pipeline_sse = None
+            return
+
+        elif path == "/api/llm/complete":
+            # Genel amaçlı, coordinator/pipeline state'inden bağımsız streaming completion.
+            # web_ui/src/lib/pythonBackendClient.ts buraya proxy yapar (llmClient.ts'in
+            # callLlm() ile aynı imzalı drop-in karşılığı) — Node artık kendi model
+            # çağrısını yapmak yerine aynı Python model yönlendirmesini kullanır.
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length).decode("utf-8")
+            try:
+                payload = json.loads(body)
+            except Exception:
+                payload = {}
+
+            msgs = payload.get("messages") or []
+            model = payload.get("model") or None
+            temperature = payload.get("temperature")
+            max_tokens = payload.get("max_tokens")
+            think_mode = payload.get("think_mode")
+
+            sse = SSEWriter(self)
+            sse.start()
+
+            def _on_token(token: str, token_type: str = "content"):
+                sse.send("token", {"type": token_type, "text": token})
+
+            try:
+                full_text = call_llm_stream(
+                    msgs, model=model, on_token=_on_token,
+                    temperature=temperature, max_tokens=max_tokens, think_mode=think_mode,
+                )
+                sse.send("done", {"text": full_text})
+            except Exception as exc:
+                sse.send("done", {"text": "", "error": str(exc)})
+            return
+
         elif path == "/api/chat":
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length).decode("utf-8")
@@ -1077,11 +1334,8 @@ class WebHarnessHandler(BaseHTTPRequestHandler):
                 self.end_headers()
                 return
 
-            self.send_response(200)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.send_header("Transfer-Encoding", "chunked")
-            self.send_header("Cache-Control", "no-cache")
-            self.end_headers()
+            sse = SSEWriter(self)
+            sse.start()
 
             if not WebHarnessHandler.coordinator:
                 with WebHarnessHandler._coordinator_lock:
@@ -1089,14 +1343,11 @@ class WebHarnessHandler(BaseHTTPRequestHandler):
                         WebHarnessHandler.coordinator = CoordinatorAgent()
 
             def token_callback(token: str, token_type: str = "content"):
-                if token_type == "content" and token:
-                    data = token.encode("utf-8")
-                    chunk_header = f"{len(data):X}\r\n".encode("utf-8")
-                    try:
-                        self.wfile.write(chunk_header + data + b"\r\n")
-                        self.wfile.flush()
-                    except Exception:
-                        pass
+                # "content" ve "thinking" (THINK modu) ikisi de iletiliyor —
+                # eskiden yalnızca "content" forward ediliyor, THINK modu
+                # web tarafında hiç görünmüyordu.
+                if token:
+                    sse.send("token", {"type": token_type, "text": token})
 
             try:
                 with WebHarnessHandler._coordinator_lock:
@@ -1104,20 +1355,15 @@ class WebHarnessHandler(BaseHTTPRequestHandler):
                         user_prompt,
                         on_token=token_callback
                     )
+                sse.send("chat_done", {"response": full_resp, "is_pipeline": is_pipeline})
             except Exception as exc:
-                err_data = f"\n[HATA: {exc}]".encode("utf-8")
-                self.wfile.write(f"{len(err_data):X}\r\n".encode("utf-8") + err_data + b"\r\n")
-
-            # Final 0 chunk to close chunked response
-            try:
-                self.wfile.write(b"0\r\n\r\n")
-                self.wfile.flush()
-            except Exception:
-                pass
+                sse.send("chat_done", {"response": "", "is_pipeline": False, "error": str(exc)})
+            return
 
 
 def start_web_server(port: int = 3005, open_browser: bool = True):
     """Web Agent sunucusunu başlatır."""
+    WebHarnessHandler._install_permission_bridge()
     server_address = ("0.0.0.0", port)
     # ThreadingHTTPServer: /api/chat uzun süren bir streaming isteğidir; eski
     # tek-thread'li HTTPServer bu istek bitene kadar /api/status, /api/files

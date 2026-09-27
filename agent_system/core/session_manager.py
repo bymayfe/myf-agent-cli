@@ -334,6 +334,21 @@ class SessionManager:
         except Exception:
             pass
 
+    def unregister_external_session(self, p: Path | str) -> bool:
+        """Harici oturum kaydını listeden kaldırır."""
+        try:
+            p_str = str(Path(p).resolve())
+            if not self._external_registry_path.exists():
+                return False
+            ext_sessions = json.loads(self._external_registry_path.read_text(encoding="utf-8"))
+            updated = [s for s in ext_sessions if str(Path(s).resolve()) != p_str]
+            if len(updated) != len(ext_sessions):
+                self._external_registry_path.write_text(json.dumps(updated, ensure_ascii=False), encoding="utf-8")
+                return True
+        except Exception:
+            pass
+        return False
+
     def create_new_session(self, title: str = "Yeni Oturum", slug: str = "yeni_proje") -> Session:
         """Önceki oturum boşsa temizle, yeni benzersiz bir session başlat."""
         if hasattr(self, "current_session") and self.current_session:
@@ -373,6 +388,8 @@ class SessionManager:
 
         for item in paths_to_check:
             if not item.exists() or not item.is_dir():
+                continue
+            if (item / ".deleted_session").exists():
                 continue
 
             session_obj = Session.load_from_dir(item)
@@ -570,16 +587,19 @@ class SessionManager:
         delete_files=False (Varsayilan): Sadece sohbet gecmisini ve .myfcli oturumunu siler, kaynak kod dosyalarini korur!
         delete_files=True (--files / -f): Proje klasorunu ve tum dosyalari disken tamamen siler.
         """
-        p = Path(target_path_or_id)
-        if not p.is_absolute():
+        p = Path(target_path_or_id).resolve()
+        self.unregister_external_session(p)
+
+        if not p.exists() or not p.is_dir():
             for item in PROJECTS_BASE_DIR.iterdir():
                 if item.is_dir():
                     s = Session.load_from_dir(item)
-                    if (s and s.session_id == target_path_or_id) or item.name == target_path_or_id:
+                    if (s and s.session_id == target_path_or_id) or item.name == target_path_or_id or f"legacy-{item.name[:8]}" == target_path_or_id:
                         p = item
                         break
 
         if p.exists() and p.is_dir():
+            self.unregister_external_session(p)
             try:
                 if delete_files:
                     shutil.rmtree(p)
@@ -595,6 +615,9 @@ class SessionManager:
                     old_brain = p / ".agent_brain.md"
                     if old_brain.exists():
                         old_brain.unlink()
+
+                    # Tekrar listede görünmemesi için işaretle
+                    (p / ".deleted_session").touch()
 
                     # Eger klasorde baska hicbir dosya yoksa klasoru kaldir
                     remaining = [f for f in p.iterdir() if f.is_file() and not f.name.startswith(".")]
@@ -615,6 +638,11 @@ class SessionManager:
                     count += 1
                 except Exception:
                     pass
+        if self._external_registry_path.exists():
+            try:
+                self._external_registry_path.write_text("[]", encoding="utf-8")
+            except Exception:
+                pass
         self.create_new_session("Yeni Oturum", "yeni_proje")
         return count
 

@@ -273,6 +273,101 @@ def set_provider_active_model(provider_name: str, model_name: str) -> str:
     return full_model_id
 
 
+def detect_running_model(provider_name: str = None) -> tuple[str | None, str | None, int | None]:
+    """
+    Yerel veya API sağlayıcının arkasında şu an aktif çalışan modeli tespit eder.
+    Döndürür: (provider_name, clean_model_name, context_window)
+    """
+    import urllib.request
+    name = provider_name or get_active_provider_name()
+    try:
+        cfg = get_provider_config(name)
+    except Exception:
+        return None, None, None
+
+    api_base = cfg.get("api_base", "").rstrip("/")
+    if not api_base:
+        return None, None, None
+
+    # 1. llama.cpp / llama-server (OpenAI uyumlu endpoint)
+    if name == "llama_cpp" or "8080" in api_base:
+        try:
+            req = urllib.request.Request(f"{api_base}/models", headers={"User-Agent": "CLI_Project"})
+            with urllib.request.urlopen(req, timeout=1.0) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                models = data.get("data") or data.get("models") or []
+                if models:
+                    first = models[0]
+                    raw_id = first.get("id") or first.get("name") or ""
+                    ctx = first.get("meta", {}).get("n_ctx")
+                    clean = Path(raw_id).name
+                    if clean.endswith(".gguf"):
+                        clean = clean[:-5]
+                    if clean:
+                        return name, clean, ctx
+        except Exception:
+            pass
+
+    # 2. Ollama (VRAM'deki aktif model)
+    elif name == "ollama" or "11434" in api_base:
+        try:
+            req = urllib.request.Request(f"{api_base}/api/ps", headers={"User-Agent": "CLI_Project"})
+            with urllib.request.urlopen(req, timeout=1.0) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                models = data.get("models") or []
+                if models:
+                    clean = models[0].get("name") or models[0].get("model")
+                    if clean:
+                        return name, clean, None
+        except Exception:
+            pass
+
+    # 3. LM Studio / Genel /v1/models
+    elif name == "lm_studio" or "1234" in api_base:
+        try:
+            req = urllib.request.Request(f"{api_base}/models", headers={"User-Agent": "CLI_Project"})
+            with urllib.request.urlopen(req, timeout=1.0) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                models = data.get("data") or []
+                if models:
+                    clean = models[0].get("id", "")
+                    if clean:
+                        return name, clean, None
+        except Exception:
+            pass
+
+    return None, None, None
+
+
+def auto_sync_running_model(provider_name: str = None) -> tuple[str | None, bool]:
+    """
+    Aktif çalışan modeli tespit eder, providers_config ve settings ile otomatik senkronize eder.
+    Döndürür: (model_adi, degisti_mi)
+    """
+    prov_name, detected_name, ctx = detect_running_model(provider_name)
+    if not detected_name:
+        return None, False
+
+    try:
+        from settings import settings
+        current_default = settings.default_model or ""
+    except Exception:
+        current_default = ""
+
+    clean_current = current_default.split("/")[-1]
+    changed = (clean_current != detected_name)
+
+    if ctx:
+        try:
+            add_provider_model(prov_name, detected_name, context_window=int(ctx))
+        except Exception:
+            pass
+
+    full_id = set_provider_active_model(prov_name, detected_name)
+    reload_config()
+    return full_id, changed
+
+
 # ─────────────────────────────────────────────
 # LLM Parametreleri
 # ─────────────────────────────────────────────
