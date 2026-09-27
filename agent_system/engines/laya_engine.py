@@ -266,12 +266,16 @@ class LayaDecisionEngine:
         has_explicit_syntax_error = any(term in err_lower for term in ("syntaxerror", "indentationerror", "taberror"))
         has_explicit_assert_error = any(term in err_lower for term in ("assertionerror", "assert ", "failed assert"))
         has_explicit_env_error = any(term in err_lower for term in ("filenotfounderror", "permissionerror", "connectionrefused"))
+        has_explicit_type_error = any(term in err_lower for term in ("typeerror", "attributeerror", "nameerror", "keyerror", "indexerror"))
 
         # Eğer model yüklenmemişse VEYA modelin güveni düşükse (< 0.60) VEYA açık belirteç sınıflandırmayla çelişiyorsa:
-        if (not self._is_ready) or (confidence < 0.60) or (has_explicit_import_error and category != "missing_dependency") or (has_explicit_syntax_error and category != "syntax_error"):
+        if (not self._is_ready) or (confidence < 0.60) or (has_explicit_import_error and category != "missing_dependency") or (has_explicit_syntax_error and category != "syntax_error") or (has_explicit_type_error and category in ("other", "missing_dependency")):
             if has_explicit_syntax_error:
                 category = "syntax_error"
                 confidence = max(confidence, 0.99)
+            elif has_explicit_type_error and not has_explicit_import_error:
+                category = "logic_bug"
+                confidence = max(confidence, 0.96)
             elif has_explicit_import_error:
                 category = "missing_dependency"
                 confidence = max(confidence, 0.98)

@@ -60,6 +60,26 @@ def _check_module_conflicts(out_path: Path) -> str | None:
     return None
 
 
+def _clean_and_truncate_traceback(error_out: str, max_chars: int = 3000) -> str:
+    """Python traceback ve pytest çıktısındaki gereksiz sistem/<frozen> satırlarını temizler
+    ve hem başı hem de asıl hatanın bulunduğu son kısmı (tail) koruyarak döndürür."""
+    if not error_out:
+        return ""
+    lines = []
+    for line in error_out.splitlines():
+        if "<frozen importlib" in line or line.strip() == "???":
+            continue
+        if "/usr/lib/python" in line and ("importlib" in line or "_bootstrap" in line):
+            continue
+        lines.append(line)
+    cleaned = "\n".join(lines).strip()
+    if len(cleaned) <= max_chars:
+        return cleaned
+
+    head_len = max_chars // 3
+    tail_len = max_chars - head_len - 60
+    return f"{cleaned[:head_len]}\n\n... [aradaki sistem/cerceve satirlari sadelestirildi] ...\n\n{cleaned[-tail_len:]}"
+
 
 class CodeVerifier:
     """
@@ -114,7 +134,7 @@ class CodeVerifier:
                     timeout=8,
                 )
                 if res.returncode != 0:
-                    stderr = res.stderr[:800]
+                    stderr = _clean_and_truncate_traceback(res.stderr, 2000)
                     etype = "import" if "ImportError" in stderr or "ModuleNotFoundError" in stderr else "syntax"
                     results["syntax_ok"] = False
                     results["error"] = f"Sentaks Hatasi ({rel_name}):\n{stderr}"
@@ -402,7 +422,7 @@ class CodeVerifier:
                             f"Calistirma Hatasi ({failing_file}):\n"
                             f"[Komut]: {cmd_str}\n"
                             f"[Dizin]: {out_path}\n"
-                            f"[Terminal]:\n{error_out[:1500]}"
+                            f"[Terminal]:\n{_clean_and_truncate_traceback(error_out, 3000)}"
                         )
                         results["error_type"] = etype
                         results["file"] = failing_file
@@ -427,7 +447,7 @@ class CodeVerifier:
                                 env=env,
                             )
                             if imp_res.returncode != 0 and imp_res.stderr.strip():
-                                err_text = imp_res.stderr.strip()[:1000]
+                                err_text = _clean_and_truncate_traceback(imp_res.stderr.strip(), 2000)
                                 etype = "import" if "ImportError" in err_text or "ModuleNotFoundError" in err_text else "runtime"
                                 results["error"] = (
                                     f"Modul Import / Calistirma Hatasi ({rel_py}):\n"
@@ -453,7 +473,7 @@ class CodeVerifier:
                                     env=env,
                                 )
                                 if dry_res.returncode != 0 and dry_res.stderr.strip():
-                                    err_text = dry_res.stderr.strip()[:1000]
+                                    err_text = _clean_and_truncate_traceback(dry_res.stderr.strip(), 2000)
                                     rel_entry = str(entry_file.relative_to(out_path)).replace("\\", "/")
                                     results["error"] = (
                                         f"Giris Noktasi Import Hatasi ({rel_entry}):\n"
