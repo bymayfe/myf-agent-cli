@@ -130,6 +130,8 @@ class MicroFixEngine:
             "Creating a new SQLAlchemy() instance in a model breaks the shared metadata registry and causes `Table already defined` or mapping errors.\n"
             "5. 🔴 FLASK APP CONTEXT: SQLAlchemy operations (`db.session`, `db.create_all()`) require an active Flask application context. "
             "If fixing test files, always ensure they call `create_app()` and push an app_context before any db operation.\n"
+            "6. 🔴 FLASK BLUEPRINT CONTRACT: In Flask route modules (app/api.py, app/routes.py), ALWAYS use Blueprint (`from flask import Blueprint; api_bp = Blueprint('api', __name__)`). NEVER do `app = Flask(__name__)` inside route files — passing a Flask instance to register_blueprint() causes `AttributeError: 'Flask' object has no attribute 'register'`.\n"
+            "7. 🔴 NO EXTERNAL HTTP REQUESTS IN TESTS: NEVER use `requests.get/post('http://localhost:5000')` in test files. Always use Flask test client (`client.get(...)`, `client.post(...)`).\n"
             "OUTPUT LANGUAGE: If you include explanations, write them in fluent Turkish."
         )
 
@@ -267,6 +269,8 @@ class EscalationEngine:
             "15. 🔴 ERROR TRACEBACK LOCALIZATION (Flask/SQLAlchemy projects only): When a traceback shows flask_sqlalchemy/model.py or sqlalchemy/orm/ in the middle of the stack, "
             "the root cause is almost never in those library files — it is in the CALLER (your model class definition). "
             "Look at the last user-code frame before the library call. For non-Flask/SQLAlchemy projects, disregard this rule and look for the last user-code frame before whatever library actually appears in the traceback.\n"
+            "16. 🔴 FLASK BLUEPRINT CONTRACT (Flask projects only): Route modules (`app/api.py`, `app/routes.py`, etc.) MUST define a Blueprint: `from flask import Blueprint; api_bp = Blueprint('api', __name__)` and register with `app.register_blueprint(api_bp)`. NEVER create `app = Flask(__name__)` inside route modules — passing a Flask instance to `register_blueprint()` raises `AttributeError: 'Flask' object has no attribute 'register'`.\n"
+            "17. 🔴 NO EXTERNAL HTTP REQUESTS IN TESTS: Tests MUST NOT use `requests.get/post('http://localhost:5000')` because pytest runs in-process without a live web server. ALWAYS use Flask's test client (`client.get('/api/...')`, `client.post('/api/...', json={...})`).\n"
             "OUTPUT LANGUAGE: Always provide explanations and summaries to the user in fluent Turkish."
         )
 
