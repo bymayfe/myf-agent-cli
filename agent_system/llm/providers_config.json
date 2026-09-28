@@ -128,7 +128,7 @@
       "label": "API - NVIDIA NIM (DGX Cloud H100)",
       "description": "NVIDIA NIM uzerinde DeepSeek V4, Nemotron ve acik modeller. Ucretsiz 1000 kredi.",
       "api_base": "https://integrate.api.nvidia.com/v1",
-      "api_key": "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",
+      "api_key": "",
       "api_key_env": "NVIDIA_API_KEY",
       "model_prefix": "openai",
       "requires_key": true,
