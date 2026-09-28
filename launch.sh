@@ -38,6 +38,7 @@ echo ""
 # Proje dizinini bul ve agent_system klasörüne geç
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/agent_system"
+export PATH="$HOME/.local/bin:$PATH"
 
 # 1. Python kontrolü
 if ! command -v python3 &> /dev/null; then
